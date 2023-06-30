@@ -10,22 +10,22 @@
 </g>
 <defs>
 <radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1130.5 -102.5) rotate(90) scale(1438.5 4422.5)">
-<stop stop-color="#4354E6"/>
-<stop offset="1" stop-color="#2E24AA" stop-opacity="0"/>
+<stop stop-color="#ff1616"/>
+<stop offset="1" stop-color="#AA0000" stop-opacity="0"/>
 </radialGradient>
 <radialGradient id="paint1_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1372 -159.5) rotate(90) scale(1455.5 1832)">
-<stop stop-color="#F89797"/>
-<stop offset="0.484375" stop-color="#D676E6" stop-opacity="0.5"/>
-<stop offset="1" stop-color="#4F477C" stop-opacity="0"/>
+<stop stop-color="#FF7F7F"/>
+<stop offset="0.484375" stop-color="#FF3F3F" stop-opacity="0.5"/>
+<stop offset="1" stop-color="#8B0000" stop-opacity="0"/>
 </radialGradient>
 <radialGradient id="paint2_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(400.5 -509) rotate(90) scale(1673 1860.5)">
-<stop stop-color="#FF8A36"/>
-<stop offset="0.348958" stop-color="#FB5A67" stop-opacity="0.5"/>
-<stop offset="1" stop-color="#68105F" stop-opacity="0"/>
+<stop stop-color="#FF4500"/>
+<stop offset="0.348958" stop-color="#FF6347" stop-opacity="0.5"/>
+<stop offset="1" stop-color="#8B0000" stop-opacity="0"/>
 </radialGradient>
 <radialGradient id="paint3_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(520.5 -305) rotate(90) scale(702 980.5)">
-<stop stop-color="#FF8A36"/>
-<stop offset="1" stop-color="#833F6E" stop-opacity="0"/>
+<stop stop-color="#FF4500"/>
+<stop offset="1" stop-color="#8B0000" stop-opacity="0"/>
 </radialGradient>
 <radialGradient id="paint4_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(500 -160) rotate(90) scale(290 1049)">
 <stop offset="0.313131" stop-color="#FBC55A"/>

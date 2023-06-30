@@ -186,7 +186,7 @@ export function createV1Theme(theme: Omit<GrafanaTheme2, 'v1'>): GrafanaTheme {
     name: theme.name,
     palette: {
       ...basicColors,
-      brandPrimary: basicColors.orange,
+      brandPrimary: basicColors.red,
       brandSuccess: theme.colors.success.main,
       brandWarning: theme.colors.warning.main,
       brandDanger: theme.colors.error.main,
