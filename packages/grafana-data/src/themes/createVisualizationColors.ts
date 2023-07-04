@@ -97,11 +97,11 @@ function getDarkHues(): ThemeVizHue[] {
     {
       name: 'red',
       shades: [
-        { color: '#FFA6B0', name: 'super-light-red' },
-        { color: '#FF7383', name: 'light-red' },
-        { color: '#F2495C', name: 'red', primary: true },
-        { color: '#E02F44', name: 'semi-dark-red' },
-        { color: '#C4162A', name: 'dark-red' },
+        { color: '#FF8890', name: 'super-light-red' },
+        { color: '#FF3942', name: 'light-red' },
+        { color: '#FF1617', name: 'red', primary: true },
+        { color: '#D01424', name: 'semi-dark-red' },
+        { color: '#B3000C', name: 'dark-red' },
       ],
     },
     {
@@ -226,14 +226,14 @@ function getClassicPalette() {
   // Todo replace these with named colors (as many as possible)
 
   return [
-    'green', // '#7EB26D', // 0: pale green
+    'red', // '#E24D42', // 4: red
+    'semi-dark-orange', // '#EF843C', // 3: orange
     'semi-dark-yellow', // '#EAB839', // 1: mustard
     'light-blue', // #6ED0E0', // 2: light blue
-    'semi-dark-orange', // '#EF843C', // 3: orange
-    'red', // '#E24D42', // 4: red
     'blue', // #1F78C1', // 5: ocean
     'purple', // '#BA43A9', // 6: purple
     '#705DA0', // 7: violet
+    'green', // '#7EB26D', // 0: pale green
     'dark-green', // '#508642', // 8: dark green
     'yellow', //'#CCA300', // 9: dark sand
     '#447EBC',

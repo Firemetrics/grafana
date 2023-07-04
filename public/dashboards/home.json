@@ -47,9 +47,9 @@
       "id": 4,
       "links": [],
       "options": {
-        "feedUrl": "https://grafana.com/blog/news.xml"
+        "feedUrl": "https://www.firemetricshealth.com/blog/news.xml"
       },
-      "title": "Latest from the blog",
+      "title": "Latest News from Firemetrics",
       "type": "news"
     }
   ],
