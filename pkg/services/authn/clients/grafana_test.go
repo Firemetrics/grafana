@@ -40,13 +40,13 @@ func TestGrafana_AuthenticateProxy(t *testing.T) {
 				proxyFieldEmail:  "email@email.com",
 			},
 			expectedIdentity: &authn.Identity{
-				OrgRoles:   map[int64]org.RoleType{1: org.RoleViewer},
-				Login:      "test",
-				Name:       "name",
-				Email:      "email@email.com",
-				AuthModule: "authproxy",
-				AuthID:     "test",
-				Groups:     []string{"grp1", "grp2"},
+				OrgRoles:        map[int64]org.RoleType{1: org.RoleViewer},
+				Login:           "test",
+				Name:            "name",
+				Email:           "email@email.com",
+				AuthenticatedBy: login.AuthProxyAuthModule,
+				AuthID:          "test",
+				Groups:          []string{"grp1", "grp2"},
 				ClientParams: authn.ClientParams{
 					SyncUser:        true,
 					SyncTeams:       true,
@@ -66,10 +66,10 @@ func TestGrafana_AuthenticateProxy(t *testing.T) {
 			req:        &authn.Request{HTTPRequest: &http.Request{Header: map[string][]string{}}},
 			additional: map[string]string{},
 			expectedIdentity: &authn.Identity{
-				Login:      "test@test.com",
-				Email:      "test@test.com",
-				AuthModule: "authproxy",
-				AuthID:     "test@test.com",
+				Login:           "test@test.com",
+				Email:           "test@test.com",
+				AuthenticatedBy: login.AuthProxyAuthModule,
+				AuthID:          "test@test.com",
 				ClientParams: authn.ClientParams{
 					SyncUser:     true,
 					SyncTeams:    true,
@@ -94,8 +94,8 @@ func TestGrafana_AuthenticateProxy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			cfg := setting.NewCfg()
-			cfg.AuthProxyAutoSignUp = true
-			cfg.AuthProxyHeaderProperty = tt.proxyProperty
+			cfg.AuthProxy.AutoSignUp = true
+			cfg.AuthProxy.HeaderProperty = tt.proxyProperty
 			c := ProvideGrafana(cfg, usertest.NewUserServiceFake())
 
 			identity, err := c.AuthenticateProxy(context.Background(), tt.req, tt.username, tt.additional)
@@ -106,17 +106,16 @@ func TestGrafana_AuthenticateProxy(t *testing.T) {
 				assert.Equal(t, tt.expectedIdentity.Name, identity.Name)
 				assert.Equal(t, tt.expectedIdentity.Email, identity.Email)
 				assert.Equal(t, tt.expectedIdentity.AuthID, identity.AuthID)
-				assert.Equal(t, tt.expectedIdentity.AuthModule, identity.AuthModule)
+				assert.Equal(t, tt.expectedIdentity.AuthenticatedBy, identity.AuthenticatedBy)
 				assert.Equal(t, tt.expectedIdentity.Groups, identity.Groups)
 
 				assert.Equal(t, tt.expectedIdentity.ClientParams.SyncUser, identity.ClientParams.SyncUser)
 				assert.Equal(t, tt.expectedIdentity.ClientParams.AllowSignUp, identity.ClientParams.AllowSignUp)
 				assert.Equal(t, tt.expectedIdentity.ClientParams.SyncTeams, identity.ClientParams.SyncTeams)
-				assert.Equal(t, tt.expectedIdentity.ClientParams.EnableDisabledUsers, identity.ClientParams.EnableDisabledUsers)
+				assert.Equal(t, tt.expectedIdentity.ClientParams.EnableUser, identity.ClientParams.EnableUser)
 
 				assert.EqualValues(t, tt.expectedIdentity.ClientParams.LookUpParams.Email, identity.ClientParams.LookUpParams.Email)
 				assert.EqualValues(t, tt.expectedIdentity.ClientParams.LookUpParams.Login, identity.ClientParams.LookUpParams.Login)
-				assert.EqualValues(t, tt.expectedIdentity.ClientParams.LookUpParams.UserID, identity.ClientParams.LookUpParams.UserID)
 			} else {
 				assert.Nil(t, tt.expectedIdentity)
 			}
@@ -126,28 +125,26 @@ func TestGrafana_AuthenticateProxy(t *testing.T) {
 
 func TestGrafana_AuthenticatePassword(t *testing.T) {
 	type testCase struct {
-		desc                 string
-		username             string
-		password             string
-		findUser             bool
-		expectedErr          error
-		expectedIdentity     *authn.Identity
-		expectedSignedInUser *user.SignedInUser
+		desc             string
+		username         string
+		password         string
+		findUser         bool
+		expectedErr      error
+		expectedIdentity *authn.Identity
 	}
 
 	tests := []testCase{
 		{
-			desc:                 "should successfully authenticate user with correct password",
-			username:             "user",
-			password:             "password",
-			findUser:             true,
-			expectedSignedInUser: &user.SignedInUser{UserID: 1, OrgID: 1, OrgRole: "Viewer"},
+			desc:     "should successfully authenticate user with correct password",
+			username: "user",
+			password: "password",
+			findUser: true,
 			expectedIdentity: &authn.Identity{
-				ID:             "user:1",
-				OrgID:          1,
-				OrgRoles:       map[int64]org.RoleType{1: "Viewer"},
-				IsGrafanaAdmin: boolPtr(false),
-				ClientParams:   authn.ClientParams{SyncPermissions: true}},
+				ID:              authn.MustParseNamespaceID("user:1"),
+				OrgID:           1,
+				AuthenticatedBy: login.PasswordAuthModule,
+				ClientParams:    authn.ClientParams{FetchSyncedUser: true, SyncPermissions: true},
+			},
 		},
 		{
 			desc:        "should fail for incorrect password",
@@ -168,8 +165,7 @@ func TestGrafana_AuthenticatePassword(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			hashed, _ := util.EncodePassword("password", "salt")
 			userService := &usertest.FakeUserService{
-				ExpectedSignedInUser: tt.expectedSignedInUser,
-				ExpectedUser:         &user.User{Password: hashed, Salt: "salt"},
+				ExpectedUser: &user.User{ID: 1, Password: user.Password(hashed), Salt: "salt"},
 			}
 
 			if !tt.findUser {

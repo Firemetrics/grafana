@@ -1,7 +1,9 @@
 import { DataFrameView, IconName } from '@grafana/data';
+import { isSharedWithMe } from 'app/features/browse-dashboards/components/utils';
+import { DashboardViewItemWithUIItems } from 'app/features/browse-dashboards/types';
 import { getDashboardSrv } from 'app/features/dashboard/services/DashboardSrv';
 
-import { DashboardViewItem } from '../types';
+import { DashboardViewItem, DashboardViewItemKind } from '../types';
 
 import { DashboardQueryResult, SearchQuery, SearchResultMeta } from './types';
 
@@ -50,6 +52,44 @@ export function getIconForKind(kind: string, isOpen?: boolean): IconName {
   return 'question-circle';
 }
 
+export function getIconForItem(item: DashboardViewItemWithUIItems, isOpen?: boolean): IconName {
+  if (item && isSharedWithMe(item.uid)) {
+    return 'users-alt';
+  } else {
+    return getIconForKind(item.kind, isOpen);
+  }
+}
+
+// export function getIconForItem(itemOrKind: string | DashboardViewItemWithUIItems, isOpen?: boolean): IconName {
+//   const kind = typeof itemOrKind === 'string' ? itemOrKind : itemOrKind.kind;
+//   const item = typeof itemOrKind === 'string' ? undefined : itemOrKind;
+
+//   if (kind === 'dashboard') {
+//     return 'apps';
+//   }
+
+//   if (item && isSharedWithMe(item.uid)) {
+//     return 'users-alt';
+//   }
+
+//   if (kind === 'folder') {
+//     return isOpen ? 'folder-open' : 'folder';
+//   }
+
+//   return 'question-circle';
+// }
+
+function parseKindString(kind: string): DashboardViewItemKind {
+  switch (kind) {
+    case 'dashboard':
+    case 'folder':
+    case 'panel':
+      return kind;
+    default:
+      return 'dashboard'; // not a great fallback, but it's the previous behaviour
+  }
+}
+
 export function queryResultToViewItem(
   item: DashboardQueryResult,
   view?: DataFrameView<DashboardQueryResult>
@@ -57,7 +97,7 @@ export function queryResultToViewItem(
   const meta = view?.dataFrame.meta?.custom as SearchResultMeta | undefined;
 
   const viewItem: DashboardViewItem = {
-    kind: 'dashboard',
+    kind: parseKindString(item.kind),
     uid: item.uid,
     title: item.name,
     url: item.url,

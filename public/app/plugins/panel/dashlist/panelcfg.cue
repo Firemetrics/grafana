@@ -28,10 +28,13 @@ composableKinds: PanelCfg: {
 					showRecentlyViewed: bool | *false
 					showSearch:         bool | *false
 					showHeadings:       bool | *true
+					showFolderNames:    bool | *true
 					maxItems:           int | *10
 					query:              string | *""
-					folderId?:          int
 					tags:               [...string] | *[]
+					// folderId is deprecated, and migrated to folderUid on panel init
+					folderId?:  int
+					folderUID?: string
 				} @cuetsy(kind="interface")
 			}
 		}]

@@ -132,6 +132,7 @@ describe('processNodes', () => {
         { name: 'SUBTITLE', type: FieldType.string, values: ['subTitle'] },
         { name: 'mainstat', type: FieldType.string, values: ['mainStat'] },
         { name: 'seconDarysTat', type: FieldType.string, values: ['secondaryStat'] },
+        { name: 'nodeRadius', type: FieldType.number, values: [20] },
       ],
     });
 
@@ -169,7 +170,7 @@ describe('processNodes', () => {
           { name: 'mainStat', type: FieldType.string },
           { name: 'secondaryStat', type: FieldType.string },
           { name: 'arc__primary', type: FieldType.string },
-          { name: 'arc__secondary', type: FieldType.string },
+          { name: 'arc__Secondary', type: FieldType.string },
           { name: 'arc__tertiary', type: FieldType.string },
         ],
       }),
@@ -191,7 +192,7 @@ describe('processNodes', () => {
         secondaryStatUnit: 'ms/r',
         arcs: [
           { field: 'arc__primary', color: 'red' },
-          { field: 'arc__secondary', color: 'yellow' },
+          { field: 'arc__Secondary', color: 'yellow' },
           { field: 'arc__tertiary', color: '#dd40ec' },
         ],
       },
@@ -211,7 +212,7 @@ describe('processNodes', () => {
     expect(nodesFrame?.fields.find((f) => f.name === 'arc__primary')?.config).toEqual({
       color: { mode: 'fixed', fixedColor: 'red' },
     });
-    expect(nodesFrame?.fields.find((f) => f.name === 'arc__secondary')?.config).toEqual({
+    expect(nodesFrame?.fields.find((f) => f.name === 'arc__Secondary')?.config).toEqual({
       color: { mode: 'fixed', fixedColor: 'yellow' },
     });
     expect(nodesFrame?.fields.find((f) => f.name === 'arc__tertiary')?.config).toEqual({
@@ -274,6 +275,7 @@ function makeNodeDatum(options: Partial<NodeDatum> = {}) {
         config: {
           color: {
             fixedColor: 'green',
+            mode: 'fixed',
           },
         },
         name: 'arc__success',
@@ -284,6 +286,7 @@ function makeNodeDatum(options: Partial<NodeDatum> = {}) {
         config: {
           color: {
             fixedColor: 'red',
+            mode: 'fixed',
           },
         },
         name: 'arc__errors',
@@ -293,6 +296,7 @@ function makeNodeDatum(options: Partial<NodeDatum> = {}) {
     ],
     color: colorField,
     dataFrameRowIndex: 0,
+    highlighted: false,
     id: '0',
     incoming: 0,
     mainStat: {
@@ -312,6 +316,13 @@ function makeNodeDatum(options: Partial<NodeDatum> = {}) {
     subTitle: 'service',
     title: 'service:0',
     icon: 'database',
+    nodeRadius: {
+      config: {},
+      index: 9,
+      name: 'noderadius',
+      type: 'number',
+      values: [40, 40, 40],
+    },
     ...options,
   };
 }
@@ -324,6 +335,10 @@ function makeEdgeDatum(id: string, index: number, mainStat = '', secondaryStat =
     secondaryStat,
     source: id.split('--')[0],
     target: id.split('--')[1],
+    sourceNodeRadius: 40,
+    targetNodeRadius: 40,
+    highlighted: false,
+    thickness: 1,
   };
 }
 
@@ -336,5 +351,6 @@ function makeNodeFromEdgeDatum(options: Partial<NodeDatum> = {}): NodeDatum {
     subTitle: '',
     title: 'service:0',
     ...options,
+    highlighted: false,
   };
 }

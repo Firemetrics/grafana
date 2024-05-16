@@ -4,8 +4,7 @@ import { groupBy, uniqueId } from 'lodash';
 import React, { useEffect } from 'react';
 
 import { dateTimeFormat, GrafanaTheme2 } from '@grafana/data';
-import { Stack } from '@grafana/experimental';
-import { Icon, TagList, useStyles2 } from '@grafana/ui';
+import { Icon, TagList, useStyles2, Stack } from '@grafana/ui';
 
 import { Label } from '../../Label';
 import { AlertStateTag } from '../AlertStateTag';
@@ -55,6 +54,7 @@ export const LogRecordViewerByTimestamp = React.memo(
               key={key}
               data-testid={key}
               ref={(element) => element && timestampRefs.set(key, element)}
+              className={styles.listItemWrapper}
             >
               <Timestamp time={key} />
               <div className={styles.logsContainer}>
@@ -63,7 +63,7 @@ export const LogRecordViewerByTimestamp = React.memo(
                     <AlertStateTag state={line.previous} size="sm" muted />
                     <Icon name="arrow-right" size="sm" />
                     <AlertStateTag state={line.current} />
-                    <Stack direction="row">{line.values && <AlertInstanceValues record={line.values} />}</Stack>
+                    <Stack>{line.values && <AlertInstanceValues record={line.values} />}</Stack>
                     <div>
                       {line.labels && (
                         <TagList
@@ -111,7 +111,7 @@ export function LogRecordViewerByInstance({ records, commonLabels }: LogRecordVi
                   <AlertStateTag state={line.previous} size="sm" muted />
                   <Icon name="arrow-right" size="sm" />
                   <AlertStateTag state={line.current} />
-                  <Stack direction="row">{line.values && <AlertInstanceValues record={line.values} />}</Stack>
+                  <Stack>{line.values && <AlertInstanceValues record={line.values} />}</Stack>
                   <div>{dateTimeFormat(timestamp)}</div>
                 </div>
               ))}
@@ -133,7 +133,7 @@ const Timestamp = ({ time }: TimestampProps) => {
 
   return (
     <div className={styles.timestampWrapper}>
-      <Stack direction="row" alignItems="center" gap={1}>
+      <Stack alignItems="center" gap={1}>
         <Icon name="clock-nine" size="sm" />
         <span className={styles.timestampText}>{dateTimeFormat(dateTime)}</span>
         <small>({formatDistanceToNowStrict(dateTime)} ago)</small>
@@ -156,25 +156,32 @@ const AlertInstanceValues = React.memo(({ record }: { record: Record<string, num
 AlertInstanceValues.displayName = 'AlertInstanceValues';
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  logsContainer: css`
-    display: grid;
-    grid-template-columns: max-content max-content max-content auto max-content;
-    gap: ${theme.spacing(2, 1)};
-    align-items: center;
-  `,
-  logsScrollable: css`
-    height: 500px;
-    overflow: scroll;
+  logsContainer: css({
+    display: 'grid',
+    gridTemplateColumns: 'max-content max-content max-content auto max-content',
+    gap: theme.spacing(2, 1),
+    alignItems: 'center',
+  }),
+  logsScrollable: css({
+    height: '500px',
+    overflow: 'scroll',
 
-    flex: 1;
-  `,
-  timestampWrapper: css`
-    color: ${theme.colors.text.secondary};
-    padding: ${theme.spacing(1)} 0;
-  `,
-  timestampText: css`
-    color: ${theme.colors.text.primary};
-    font-size: ${theme.typography.bodySmall.fontSize};
-    font-weight: ${theme.typography.fontWeightBold};
-  `,
+    flex: 1,
+  }),
+  timestampWrapper: css({
+    color: theme.colors.text.secondary,
+  }),
+  timestampText: css({
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontWeight: theme.typography.fontWeightBold,
+  }),
+  listItemWrapper: css({
+    background: 'transparent',
+    outline: '1px solid transparent',
+    padding: `${theme.spacing(1)} ${theme.spacing(1.5)}`,
+    [theme.transitions.handleMotion('no-preference', 'reduce')]: {
+      transition: 'background 150ms, outline 150ms',
+    },
+  }),
 });

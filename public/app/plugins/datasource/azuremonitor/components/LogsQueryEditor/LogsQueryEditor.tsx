@@ -1,18 +1,20 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
+import { PanelData, TimeRange } from '@grafana/data';
 import { EditorFieldGroup, EditorRow, EditorRows } from '@grafana/experimental';
-import { Alert } from '@grafana/ui';
+import { Alert, LinkButton } from '@grafana/ui';
 
 import Datasource from '../../datasource';
 import { selectors } from '../../e2e/selectors';
-import { AzureMonitorErrorish, AzureMonitorOption, AzureMonitorQuery, ResultFormat } from '../../types';
-import FormatAsField from '../FormatAsField';
+import { AzureMonitorErrorish, AzureMonitorOption, AzureMonitorQuery, ResultFormat, EngineSchema } from '../../types';
 import ResourceField from '../ResourceField';
 import { ResourceRow, ResourceRowGroup, ResourceRowType } from '../ResourcePicker/types';
 import { parseResourceDetails } from '../ResourcePicker/utils';
+import FormatAsField from '../shared/FormatAsField';
 
 import AdvancedResourcePicker from './AdvancedResourcePicker';
 import QueryField from './QueryField';
+import { TimeManagement } from './TimeManagement';
 import { setFormatAs } from './setQueryValue';
 import useMigrations from './useMigrations';
 
@@ -24,6 +26,8 @@ interface LogsQueryEditorProps {
   variableOptionGroup: { label: string; options: AzureMonitorOption[] };
   setError: (source: string, error: AzureMonitorErrorish | undefined) => void;
   hideFormatAs?: boolean;
+  timeRange?: TimeRange;
+  data?: PanelData;
 }
 
 const LogsQueryEditor = ({
@@ -34,6 +38,8 @@ const LogsQueryEditor = ({
   onChange,
   setError,
   hideFormatAs,
+  timeRange,
+  data,
 }: LogsQueryEditorProps) => {
   const migrationError = useMigrations(datasource, query, onChange);
   const disableRow = (row: ResourceRow, selectedRows: ResourceRowGroup) => {
@@ -49,6 +55,35 @@ const LogsQueryEditor = ({
     // Only resources with the same metricNamespace can be selected
     return rowResourceNS !== selectedRowSampleNs;
   };
+  const [schema, setSchema] = useState<EngineSchema | undefined>();
+
+  useEffect(() => {
+    if (query.azureLogAnalytics?.resources && query.azureLogAnalytics.resources.length) {
+      datasource.azureLogAnalyticsDatasource.getKustoSchema(query.azureLogAnalytics.resources[0]).then((schema) => {
+        setSchema(schema);
+      });
+    }
+  }, [query.azureLogAnalytics?.resources, datasource.azureLogAnalyticsDatasource]);
+
+  let portalLinkButton = null;
+
+  if (data?.series) {
+    const querySeries = data.series.find((result) => result.refId === query.refId);
+    if (querySeries && querySeries.meta?.custom?.azurePortalLink) {
+      portalLinkButton = (
+        <>
+          <LinkButton
+            size="md"
+            target="_blank"
+            style={{ marginTop: '22px' }}
+            href={querySeries.meta?.custom?.azurePortalLink}
+          >
+            View query in Azure Portal
+          </LinkButton>
+        </>
+      );
+    }
+  }
 
   return (
     <span data-testid={selectors.components.queryEditor.logsQueryEditor.container.input}>
@@ -81,6 +116,14 @@ const LogsQueryEditor = ({
               )}
               selectionNotice={() => 'You may only choose items of the same resource type.'}
             />
+            <TimeManagement
+              query={query}
+              datasource={datasource}
+              variableOptionGroup={variableOptionGroup}
+              onQueryChange={onChange}
+              setError={setError}
+              schema={schema}
+            />
           </EditorFieldGroup>
         </EditorRow>
         <QueryField
@@ -90,6 +133,7 @@ const LogsQueryEditor = ({
           variableOptionGroup={variableOptionGroup}
           onQueryChange={onChange}
           setError={setError}
+          schema={schema}
         />
         <EditorRow>
           <EditorFieldGroup>
@@ -103,15 +147,16 @@ const LogsQueryEditor = ({
                 setError={setError}
                 inputId={'azure-monitor-logs'}
                 options={[
+                  { label: 'Log', value: ResultFormat.Logs },
                   { label: 'Time series', value: ResultFormat.TimeSeries },
                   { label: 'Table', value: ResultFormat.Table },
                 ]}
-                defaultValue={ResultFormat.Table}
+                defaultValue={ResultFormat.Logs}
                 setFormatAs={setFormatAs}
                 resultFormat={query.azureLogAnalytics?.resultFormat}
               />
             )}
-
+            {portalLinkButton}
             {migrationError && <Alert title={migrationError.title}>{migrationError.message}</Alert>}
           </EditorFieldGroup>
         </EditorRow>

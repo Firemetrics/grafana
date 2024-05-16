@@ -24,7 +24,7 @@ const meta: Meta = {
   },
   argTypes: {
     featureState: {
-      control: { type: 'select', options: ['alpha', 'beta', undefined] },
+      control: { type: 'select', options: ['experimental', 'preview'] },
     },
   },
 };
@@ -33,7 +33,7 @@ const defaultProps: FeatureInfoBoxProps = {
   title: 'A title',
   severity: 'info',
   url: 'http://www.grafana.com',
-  featureState: FeatureState.beta,
+  featureState: FeatureState.preview,
 
   children: (
     <p>
@@ -49,7 +49,7 @@ const InfoBoxTemplate: StoryFn<typeof InfoBox> = (args) => {
   return (
     <VerticalGroup>
       <div>Deprecrated component, use Alert with info severity</div>
-      <InfoBox {...args} />;
+      <InfoBox {...args} />
     </VerticalGroup>
   );
 };

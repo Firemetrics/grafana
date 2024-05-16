@@ -1,12 +1,14 @@
-import { waitFor, screen, within, waitForElementToBeRemoved } from '@testing-library/react';
-import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
+import { screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { renderRuleEditor, ui } from 'test/helpers/alertingRuleEditor';
 import { clickSelectOption } from 'test/helpers/selectOptionInTest';
-import { byRole, byText } from 'testing-library-selector';
+import { byText } from 'testing-library-selector';
 
 import { setDataSourceSrv } from '@grafana/runtime';
 import { contextSrv } from 'app/core/services/context_srv';
+import { setupMswServer } from 'app/features/alerting/unified/mockApi';
+import { AccessControlAction } from 'app/types';
 import { PromApplication } from 'app/types/unified-alerting-dto';
 
 import { searchFolders } from '../../manage-dashboards/state/actions';
@@ -14,7 +16,7 @@ import { searchFolders } from '../../manage-dashboards/state/actions';
 import { discoverFeatures } from './api/buildInfo';
 import { fetchRulerRules, fetchRulerRulesGroup, fetchRulerRulesNamespace, setRulerRuleGroup } from './api/ruler';
 import { RecordingRuleEditorProps } from './components/rule-editor/RecordingRuleEditor';
-import { disableRBAC, mockDataSource, MockDataSourceSrv } from './mocks';
+import { MockDataSourceSrv, grantUserPermissions, mockDataSource } from './mocks';
 import { fetchRulerRulesIfNotFetchedYet } from './state/actions';
 import * as config from './utils/config';
 
@@ -37,6 +39,10 @@ jest.mock('./components/rule-editor/RecordingRuleEditor', () => ({
 
     return <input data-testid="expr" onChange={(e) => onChange(e.target.value)} />;
   },
+}));
+
+jest.mock('app/core/components/AppChrome/AppChromeUpdate', () => ({
+  AppChromeUpdate: ({ actions }: { actions: React.ReactNode }) => <div>{actions}</div>,
 }));
 
 jest.mock('./api/buildInfo');
@@ -67,6 +73,7 @@ jest.mock('@grafana/runtime', () => ({
   getDataSourceSrv: jest.fn(() => ({
     getInstanceSettings: () => dataSources.default,
     get: () => dataSources.default,
+    getList: () => Object.values(dataSources),
   })),
 }));
 
@@ -85,16 +92,28 @@ const mocks = {
   },
 };
 
-const getLabelInput = (selector: HTMLElement) => within(selector).getByRole('combobox');
+setupMswServer();
 
 describe('RuleEditor recording rules', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     contextSrv.isEditor = true;
     contextSrv.hasEditPermissionInFolders = true;
+    grantUserPermissions([
+      AccessControlAction.AlertingRuleRead,
+      AccessControlAction.AlertingRuleUpdate,
+      AccessControlAction.AlertingRuleDelete,
+      AccessControlAction.AlertingRuleCreate,
+      AccessControlAction.DataSourcesRead,
+      AccessControlAction.DataSourcesWrite,
+      AccessControlAction.DataSourcesCreate,
+      AccessControlAction.FoldersWrite,
+      AccessControlAction.FoldersRead,
+      AccessControlAction.AlertingRuleExternalRead,
+      AccessControlAction.AlertingRuleExternalWrite,
+    ]);
   });
 
-  disableRBAC();
   it('can create a new cloud recording rule', async () => {
     setDataSourceSrv(new MockDataSourceSrv(dataSources));
     mocks.getAllDataSources.mockReturnValue(Object.values(dataSources));
@@ -132,22 +151,16 @@ describe('RuleEditor recording rules', () => {
     await userEvent.type(await ui.inputs.name.find(), 'my great new recording rule');
 
     const dataSourceSelect = ui.inputs.dataSource.get();
-    await userEvent.click(byRole('combobox').get(dataSourceSelect));
+    await userEvent.click(dataSourceSelect);
 
-    await clickSelectOption(dataSourceSelect, 'Prom (default)');
+    await userEvent.click(screen.getByText('Prom'));
     await clickSelectOption(ui.inputs.namespace.get(), 'namespace2');
     await clickSelectOption(ui.inputs.group.get(), 'group2');
 
     await userEvent.type(await ui.inputs.expr.find(), 'up == 1');
 
-    // TODO remove skipPointerEventsCheck once https://github.com/jsdom/jsdom/issues/3232 is fixed
-    await userEvent.click(ui.buttons.addLabel.get(), { pointerEventsCheck: PointerEventsCheckLevel.Never });
-
-    await userEvent.type(getLabelInput(ui.inputs.labelKey(1).get()), 'team{enter}');
-    await userEvent.type(getLabelInput(ui.inputs.labelValue(1).get()), 'the a-team{enter}');
-
     // try to save, find out that recording rule name is invalid
-    await userEvent.click(ui.buttons.save.get());
+    await userEvent.click(ui.buttons.saveAndExit.get());
     await waitFor(() =>
       expect(
         byText(
@@ -162,7 +175,7 @@ describe('RuleEditor recording rules', () => {
     await userEvent.type(await ui.inputs.name.find(), 'my:great:new:recording:rule');
 
     // save and check what was sent to backend
-    await userEvent.click(ui.buttons.save.get());
+    await userEvent.click(ui.buttons.saveAndExit.get());
     await waitFor(() => expect(mocks.api.setRulerRuleGroup).toHaveBeenCalled());
     expect(mocks.api.setRulerRuleGroup).toHaveBeenCalledWith(
       { dataSourceName: 'Prom', apiVersion: 'legacy' },
@@ -172,7 +185,7 @@ describe('RuleEditor recording rules', () => {
         rules: [
           {
             record: 'my:great:new:recording:rule',
-            labels: { team: 'the a-team' },
+            labels: {},
             expr: 'up == 1',
           },
         ],

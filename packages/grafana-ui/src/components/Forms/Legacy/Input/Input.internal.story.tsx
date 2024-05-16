@@ -1,16 +1,14 @@
-import { Meta, Story } from '@storybook/react';
+import { Meta, StoryFn } from '@storybook/react';
 import { zip, fromPairs } from 'lodash';
 import React, { useState } from 'react';
 
 import { EventsWithValidation } from '../../../../utils';
-import { withCenteredStory } from '../../../../utils/storybook/withCenteredStory';
 
 import { Input } from './Input';
 
 const meta: Meta = {
   title: 'Forms/Legacy/Input',
   component: Input,
-  decorators: [withCenteredStory],
   parameters: {
     controls: {
       exclude: ['inputRef', 'onBlur', 'onFocus', 'onChange'],
@@ -27,7 +25,7 @@ const meta: Meta = {
   },
 };
 
-const Wrapper: Story = (args) => {
+const Wrapper: StoryFn = (args) => {
   const [value, setValue] = useState('');
   const validations = {
     [args.validationEvents]: [

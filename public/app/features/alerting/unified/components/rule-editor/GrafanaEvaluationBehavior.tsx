@@ -1,25 +1,24 @@
 import { css } from '@emotion/css';
 import React, { useCallback, useEffect, useState } from 'react';
-import { RegisterOptions, useFormContext } from 'react-hook-form';
+import { RegisterOptions, useFormContext, Controller } from 'react-hook-form';
 
 import { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Stack } from '@grafana/experimental';
-import { Button, Field, Icon, InlineLabel, Input, InputControl, Switch, Tooltip, useStyles2 } from '@grafana/ui';
-import { RulerRulesConfigDTO } from 'app/types/unified-alerting-dto';
+import { Field, Icon, IconButton, Input, Label, Stack, Switch, Text, Tooltip, useStyles2 } from '@grafana/ui';
 
 import { CombinedRuleGroup, CombinedRuleNamespace } from '../../../../../types/unified-alerting';
-import { logInfo, LogMessages } from '../../Analytics';
+import { LogMessages, logInfo } from '../../Analytics';
 import { useCombinedRuleNamespaces } from '../../hooks/useCombinedRuleNamespaces';
 import { useUnifiedAlertingSelector } from '../../hooks/useUnifiedAlertingSelector';
 import { RuleFormValues } from '../../types/rule-form';
 import { GRAFANA_RULES_SOURCE_NAME } from '../../utils/datasource';
-import { MINUTE } from '../../utils/rule-form';
 import { parsePrometheusDuration } from '../../utils/time';
 import { CollapseToggle } from '../CollapseToggle';
-import { EditCloudGroupModal, evaluateEveryValidationOptions } from '../rules/EditRuleGroupModal';
+import { EditCloudGroupModal } from '../rules/EditRuleGroupModal';
 
-import { FolderAndGroup, useGetGroupOptionsFromFolder } from './FolderAndGroup';
+import { FolderAndGroup, useFolderGroupOptions } from './FolderAndGroup';
 import { GrafanaAlertStatePicker } from './GrafanaAlertStatePicker';
+import { NeedHelpInfo } from './NeedHelpInfo';
+import { PendingPeriodQuickPick } from './PendingPeriodQuickPick';
 import { RuleEditorSection } from './RuleEditorSection';
 
 export const MIN_TIME_RANGE_STEP_S = 10; // 10 seconds
@@ -47,7 +46,7 @@ const forValidationOptions = (evaluateEvery: string): RegisterOptions => ({
         const millisEvery = parsePrometheusDuration(evaluateEvery);
         return millisFor >= millisEvery
           ? true
-          : 'For duration must be greater than or equal to the evaluation interval.';
+          : 'Pending period must be greater than or equal to the evaluation interval.';
       } catch (err) {
         // if we fail to parse "every", assume validation is successful, or the error messages
         // will overlap in the UI
@@ -60,7 +59,7 @@ const forValidationOptions = (evaluateEvery: string): RegisterOptions => ({
 });
 
 const useIsNewGroup = (folder: string, group: string) => {
-  const { groupOptions } = useGetGroupOptionsFromFolder(folder);
+  const { groupOptions } = useFolderGroupOptions(folder, false);
 
   const groupIsInGroupOptions = useCallback(
     (group_: string) => groupOptions.some((groupInList: SelectableValue<string>) => groupInList.label === group_),
@@ -69,78 +68,33 @@ const useIsNewGroup = (folder: string, group: string) => {
   return !groupIsInGroupOptions(group);
 };
 
-export const EvaluateEveryNewGroup = ({ rules }: { rules: RulerRulesConfigDTO | null | undefined }) => {
-  const {
-    watch,
-    register,
-    formState: { errors },
-  } = useFormContext<RuleFormValues>();
-  const styles = useStyles2(getStyles);
-  const evaluateEveryId = 'eval-every-input';
-  const [groupName, folderName] = watch(['group', 'folder.title']);
-
-  const groupRules = (rules && rules[folderName]?.find((g) => g.name === groupName)?.rules) ?? [];
-
-  return (
-    <Field
-      label="Evaluation interval"
-      description="Applies to every rule within a group. It can overwrite the interval of an existing alert rule."
-    >
-      <div className={styles.alignInterval}>
-        <Stack direction="row" justify-content="left" align-items="baseline" gap={0}>
-          <InlineLabel
-            htmlFor={evaluateEveryId}
-            width={16}
-            tooltip="How often the alert will be evaluated to see if it fires"
-          >
-            Evaluate every
-          </InlineLabel>
-          <Field
-            className={styles.inlineField}
-            error={errors.evaluateEvery?.message}
-            invalid={!!errors.evaluateEvery}
-            validationMessageHorizontalOverflow={true}
-          >
-            <Input
-              id={evaluateEveryId}
-              width={8}
-              {...register('evaluateEvery', evaluateEveryValidationOptions(groupRules))}
-            />
-          </Field>
-        </Stack>
-      </div>
-    </Field>
-  );
-};
-
 function FolderGroupAndEvaluationInterval({
   evaluateEvery,
   setEvaluateEvery,
+  enableProvisionedGroups,
 }: {
   evaluateEvery: string;
   setEvaluateEvery: (value: string) => void;
+  enableProvisionedGroups: boolean;
 }) {
   const styles = useStyles2(getStyles);
-  const { watch, setValue } = useFormContext<RuleFormValues>();
+  const { watch, setValue, getValues } = useFormContext<RuleFormValues>();
   const [isEditingGroup, setIsEditingGroup] = useState(false);
 
-  const [groupName, folderName] = watch(['group', 'folder.title']);
+  const [groupName, folderUid, folderName] = watch(['group', 'folder.uid', 'folder.title']);
 
   const rulerRuleRequests = useUnifiedAlertingSelector((state) => state.rulerRules);
   const groupfoldersForGrafana = rulerRuleRequests[GRAFANA_RULES_SOURCE_NAME];
 
   const grafanaNamespaces = useCombinedRuleNamespaces(GRAFANA_RULES_SOURCE_NAME);
-  const existingNamespace = grafanaNamespaces.find((ns) => ns.name === folderName);
+  const existingNamespace = grafanaNamespaces.find((ns) => ns.uid === folderUid);
   const existingGroup = existingNamespace?.groups.find((g) => g.name === groupName);
 
-  const isNewGroup = useIsNewGroup(folderName ?? '', groupName);
+  const isNewGroup = useIsNewGroup(folderUid ?? '', groupName);
 
   useEffect(() => {
     if (!isNewGroup && existingGroup?.interval) {
       setEvaluateEvery(existingGroup.interval);
-    } else {
-      setEvaluateEvery(MINUTE);
-      setValue('evaluateEvery', MINUTE);
     }
   }, [setEvaluateEvery, isNewGroup, setValue, existingGroup]);
 
@@ -153,7 +107,7 @@ function FolderGroupAndEvaluationInterval({
 
   const onOpenEditGroupModal = () => setIsEditingGroup(true);
 
-  const editGroupDisabled = groupfoldersForGrafana?.loading || isNewGroup || !folderName || !groupName;
+  const editGroupDisabled = groupfoldersForGrafana?.loading || isNewGroup || !folderUid || !groupName;
 
   const emptyNamespace: CombinedRuleNamespace = {
     name: folderName,
@@ -164,50 +118,40 @@ function FolderGroupAndEvaluationInterval({
 
   return (
     <div>
-      <FolderAndGroup />
+      <FolderAndGroup
+        groupfoldersForGrafana={groupfoldersForGrafana?.result}
+        enableProvisionedGroups={enableProvisionedGroups}
+      />
       {folderName && isEditingGroup && (
         <EditCloudGroupModal
           namespace={existingNamespace ?? emptyNamespace}
           group={existingGroup ?? emptyGroup}
+          folderUid={folderUid}
           onClose={() => closeEditGroupModal()}
           intervalEditOnly
+          hideFolder={true}
         />
       )}
       {folderName && groupName && (
         <div className={styles.evaluationContainer}>
           <Stack direction="column" gap={0}>
             <div className={styles.marginTop}>
-              {isNewGroup && groupName ? (
-                <EvaluateEveryNewGroup rules={groupfoldersForGrafana?.result} />
-              ) : (
-                <Stack direction="column" gap={1}>
-                  <div className={styles.evaluateLabel}>
-                    {`Alert rules in the `} <span className={styles.bold}>{groupName}</span> group are evaluated every{' '}
-                    <span className={styles.bold}>{evaluateEvery}</span>.
-                  </div>
-                  {!isNewGroup && (
-                    <div>
-                      {`Evaluation group interval applies to every rule within a group. It overwrites intervals defined for existing alert rules.`}
-                    </div>
-                  )}
-                </Stack>
-              )}
+              <Stack direction="column" gap={1}>
+                {getValues('group') && getValues('evaluateEvery') && (
+                  <span>
+                    All rules in the selected group are evaluated every {evaluateEvery}.{' '}
+                    {!isNewGroup && (
+                      <IconButton
+                        name="pen"
+                        aria-label="Edit"
+                        disabled={editGroupDisabled}
+                        onClick={onOpenEditGroupModal}
+                      />
+                    )}
+                  </span>
+                )}
+              </Stack>
             </div>
-            <Stack direction="row" justify-content="right" align-items="center">
-              {!isNewGroup && (
-                <div className={styles.marginTop}>
-                  <Button
-                    icon={'edit'}
-                    type="button"
-                    variant="secondary"
-                    disabled={editGroupDisabled}
-                    onClick={onOpenEditGroupModal}
-                  >
-                    <span>{'Edit evaluation group'}</span>
-                  </Button>
-                </div>
-              )}
-            </Stack>
           </Stack>
         </div>
       )}
@@ -220,27 +164,60 @@ function ForInput({ evaluateEvery }: { evaluateEvery: string }) {
   const {
     register,
     formState: { errors },
+    setValue,
+    watch,
   } = useFormContext<RuleFormValues>();
 
   const evaluateForId = 'eval-for-input';
+  const currentPendingPeriod = watch('evaluateFor');
+
+  const setPendingPeriod = (pendingPeriod: string) => {
+    setValue('evaluateFor', pendingPeriod);
+  };
 
   return (
     <Stack direction="row" justify-content="flex-start" align-items="flex-start">
-      <InlineLabel
-        htmlFor={evaluateForId}
-        width={7}
-        tooltip='Once the condition is breached, the alert goes into pending state. If the alert is pending longer than the "for" value, it becomes a firing alert.'
-      >
-        for
-      </InlineLabel>
       <Field
+        label={
+          <Label
+            htmlFor="evaluateFor"
+            description="Period in which an alert rule can be in breach of the condition until the alert rule fires."
+          >
+            Pending period
+          </Label>
+        }
         className={styles.inlineField}
         error={errors.evaluateFor?.message}
-        invalid={!!errors.evaluateFor?.message}
+        invalid={Boolean(errors.evaluateFor?.message) ? true : undefined}
         validationMessageHorizontalOverflow={true}
       >
-        <Input id={evaluateForId} width={8} {...register('evaluateFor', forValidationOptions(evaluateEvery))} />
+        <Stack direction="row" alignItems="center">
+          <Input id={evaluateForId} width={8} {...register('evaluateFor', forValidationOptions(evaluateEvery))} />
+          <PendingPeriodQuickPick
+            selectedPendingPeriod={currentPendingPeriod}
+            groupEvaluationInterval={evaluateEvery}
+            onSelect={setPendingPeriod}
+          />
+        </Stack>
       </Field>
+    </Stack>
+  );
+}
+
+function getDescription() {
+  const docsLink = 'https://grafana.com/docs/grafana/latest/alerting/fundamentals/alert-rules/rule-evaluation/';
+
+  return (
+    <Stack direction="row" gap={0.5} alignItems="baseline">
+      <Text variant="bodySmall" color="secondary">
+        Define how the alert rule is evaluated.
+      </Text>
+      <NeedHelpInfo
+        contentText="Evaluation groups are containers for evaluating alert and recording rules. An evaluation group defines an evaluation interval - how often a rule is checked. Alert rules within the same evaluation group are evaluated sequentially"
+        externalLink={docsLink}
+        linkText={`Read about evaluation`}
+        title="Evaluation"
+      />
     </Stack>
   );
 }
@@ -249,10 +226,12 @@ export function GrafanaEvaluationBehavior({
   evaluateEvery,
   setEvaluateEvery,
   existing,
+  enableProvisionedGroups,
 }: {
   evaluateEvery: string;
   setEvaluateEvery: (value: string) => void;
   existing: boolean;
+  enableProvisionedGroups: boolean;
 }) {
   const styles = useStyles2(getStyles);
   const [showErrorHandling, setShowErrorHandling] = useState(false);
@@ -263,14 +242,18 @@ export function GrafanaEvaluationBehavior({
 
   return (
     // TODO remove "and alert condition" for recording rules
-    <RuleEditorSection stepNo={3} title="Alert evaluation behavior">
+    <RuleEditorSection stepNo={3} title="Set evaluation behavior" description={getDescription()}>
       <Stack direction="column" justify-content="flex-start" align-items="flex-start">
-        <FolderGroupAndEvaluationInterval setEvaluateEvery={setEvaluateEvery} evaluateEvery={evaluateEvery} />
+        <FolderGroupAndEvaluationInterval
+          setEvaluateEvery={setEvaluateEvery}
+          evaluateEvery={evaluateEvery}
+          enableProvisionedGroups={enableProvisionedGroups}
+        />
         <ForInput evaluateEvery={evaluateEvery} />
 
         {existing && (
           <Field htmlFor="pause-alert-switch">
-            <InputControl
+            <Controller
               render={() => (
                 <Stack gap={1} direction="row" alignItems="center">
                   <Switch
@@ -297,12 +280,11 @@ export function GrafanaEvaluationBehavior({
         isCollapsed={!showErrorHandling}
         onToggle={(collapsed) => setShowErrorHandling(!collapsed)}
         text="Configure no data and error handling"
-        className={styles.collapseToggle}
       />
       {showErrorHandling && (
         <>
           <Field htmlFor="no-data-state-input" label="Alert state if no data or all values are null">
-            <InputControl
+            <Controller
               render={({ field: { onChange, ref, ...field } }) => (
                 <GrafanaAlertStatePicker
                   {...field}
@@ -317,7 +299,7 @@ export function GrafanaEvaluationBehavior({
             />
           </Field>
           <Field htmlFor="exec-err-state-input" label="Alert state if execution error or timeout">
-            <InputControl
+            <Controller
               render={({ field: { onChange, ref, ...field } }) => (
                 <GrafanaAlertStatePicker
                   {...field}
@@ -338,48 +320,44 @@ export function GrafanaEvaluationBehavior({
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  inlineField: css`
-    margin-bottom: 0;
-  `,
-  collapseToggle: css`
-    margin: ${theme.spacing(2, 0, 2, -1)};
-  `,
-  evaluateLabel: css`
-    margin-right: ${theme.spacing(1)};
-  `,
-  evaluationContainer: css`
-    background-color: ${theme.colors.background.secondary};
-    padding: ${theme.spacing(2)};
-    max-width: ${theme.breakpoints.values.sm}px;
-    font-size: ${theme.typography.size.sm};
-  `,
-  intervalChangedLabel: css`
-    margin-bottom: ${theme.spacing(1)};
-  `,
-  warningIcon: css`
-    justify-self: center;
-    margin-right: ${theme.spacing(1)};
-    color: ${theme.colors.warning.text};
-  `,
-  infoIcon: css`
-    margin-left: 10px;
-  `,
-  warningMessage: css`
-    color: ${theme.colors.warning.text};
-  `,
-  bold: css`
-    font-weight: bold;
-  `,
-  alignInterval: css`
-    margin-top: ${theme.spacing(1)};
-    margin-left: -${theme.spacing(1)};
-  `,
-  marginTop: css`
-    margin-top: ${theme.spacing(1)};
-  `,
-  switchLabel: css(`
-    color: ${theme.colors.text.primary},
+  inlineField: css({
+    marginBottom: 0,
+  }),
+  evaluateLabel: css({
+    marginRight: theme.spacing(1),
+  }),
+  evaluationContainer: css({
+    color: theme.colors.text.secondary,
+    maxWidth: `${theme.breakpoints.values.sm}px`,
+    fontSize: theme.typography.size.sm,
+  }),
+  intervalChangedLabel: css({
+    marginBottom: theme.spacing(1),
+  }),
+  warningIcon: css({
+    justifySelf: 'center',
+    marginRight: theme.spacing(1),
+    color: theme.colors.warning.text,
+  }),
+  infoIcon: css({
+    marginLeft: '10px',
+  }),
+  warningMessage: css({
+    color: theme.colors.warning.text,
+  }),
+  bold: css({
+    fontWeight: 'bold',
+  }),
+  alignInterval: css({
+    marginTop: theme.spacing(1),
+    marginLeft: `-${theme.spacing(1)}`,
+  }),
+  marginTop: css({
+    marginTop: theme.spacing(1),
+  }),
+  switchLabel: css({
+    color: theme.colors.text.primary,
     cursor: 'pointer',
-    fontSize: ${theme.typography.bodySmall.fontSize},
-  `),
+    fontSize: theme.typography.bodySmall.fontSize,
+  }),
 });

@@ -7,73 +7,146 @@ keywords:
   - documentation
   - panels
   - flame graph
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+description: Configure options for Grafana's flame graph visualization
 title: Flame graph
-weight: 850
+weight: 100
 ---
 
-# Flame graph panel
+# Flame graph
 
-The flame graph takes advantage of the hierarchical nature of profiling data. It condenses data into a format that allows you to easily see which code paths are consuming the most system resources.
+Flame graphs let you visualize [profiling](https://grafana.com/docs/pyroscope/latest/introduction/profiling/) data. Using this visualization, a [profile](https://grafana.com/docs/pyroscope/latest/view-and-analyze-profile-data/profiling-types/) can be represented as a [flame graph](#flame-graph-mode), [top table](#top-table-mode), or both.
 
-These resources are measured through profiles which aggregate that information into a format which is then sent to the flame graph visualization. For example, allocated objects or space when measuring memory.
+For example, if you want to understand which parts of a program consume the most resources, such as CPU time, memory, or I/O operations, you can use a flame graph to visualize and analyze where potential performance issues are:
 
-![Figure 1 - Flame graph](/static/img/docs/flame-graph-panel/flame-graph.png 'Figure 1 - Flame graph')
+## Panel options
 
-Figure 1 illustrates what this data looks like when rendered. The top block is the root or parent of the other blocks, and represents the total of all of the profiles being measured. There may be one or more blocks for each row that is rendered below the total. Each of these blocks represents a child in the stack of function calls that originated from the original call to the root at the top of the flame graph.
+{{< docs/shared lookup="visualizations/panel-options.md" source="grafana" version="<GRAFANA_VERSION>" >}}
 
-Each block can have zero or more siblings but can only have one parent.
+## Flame graph mode
 
-In figure 1 displays many rows of colored blocks as well as grayed-out sections which are a set of blocks that represent a relatively short execution time and were collapsed together into one section for performance reasons.
+{{< figure src="/static/img/docs/flame-graph-panel/flame-graph-dark-mode.png" max-width="1025px" alt="A flame graph visualization for a system profile with both flame graph and top table mode." >}}
 
-![Figure 2 - Hovering over flame graph](/static/img/docs/flame-graph-panel/flame-graph-hovering.png 'Figure 2 - Hovering over flame graph')
+You can use a flame graph visualization if you need to:
 
-You can hover a specific block to view a tooltip that shows you what the profile is measuring, in this case total time, along with other information such as this block's % of total time, the amount of time it took, and the samples that were measured.
+- Identify any performance hotspots to find where code optimizations may be needed.
+- Diagnose the root cause of any performance degradation.
+- Analyze the behavior of complex systems, including distributed systems or microservices architectures.
 
-![Figure 3 - Clicking on a block](/static/img/docs/flame-graph-panel/flame-graph-clicking.png 'Figure 3 - Clicking on a block')
+To learn more about how Grafana Pyroscope visualizes flame graphs, refer to [Flame graphs: Visualizing performance data](https://grafana.com/docs/pyroscope/latest/view-and-analyze-profile-data/flamegraphs/).
 
-You can click on a block to drill down to the stack of function calls for that block and its child blocks. The clicked block is set to 100% of the flame graph's width and all its children blocks are shown with their widths updated relative to the width of the parent block.
+## Configure a flame graph visualization
 
-This process can be repeated to focus on finding the amount of resources that particular blocks and their children are consuming.
+Once you’ve created a [dashboard](https://grafana.com/docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/create-dashboard/), the following video shows you how to configure a flame graph visualization:
 
-![Figure 4 - Search](/static/img/docs/flame-graph-panel/flame-graph-search.png 'Figure 4 - Search')
+{{< youtube id="VEvK0JkPlOY" >}}
 
-You can use the search field to find blocks with particular labels. When you search by a label name, all of the blocks in the table with labels that include the search text remain colored, while the rest of the blocks are grayed-out.
+{{< docs/play title="Flame Graphs" url="https://play.grafana.org/d/cdl34qv4zzg8wa/" >}}
 
-You can also click on any block or hover over it to narrow your search.
+## Supported data formats
 
-## Top table
+To render a flame graph, you must format the data frame data using a _nested set model_.
 
-The top table allows you to visualize which symbols take up the most resources in your profile.
-
-The table has three columns: symbols, self, and total. The table is sorted by self time by default, but can be reordered by total time or symbol name by clicking the column headers.
-
-![Figure 5 - Top table](/static/img/docs/flame-graph-panel/top-table.png 'Figure 5 - Top table')
-
-Clicking on a row of the top table will add or remove that row's symbol to the search input for the flame graph.
-
-Clicking on the same row again will remove its symbol from the search input.
-
-![Figure 6 - Clicking on a top table row](/static/img/docs/flame-graph-panel/top-table-clicking.png 'Figure 6 - Clicking on a top table row')
-
-You can choose from three table view options:
-
-- Top Table: Only show the top table
-- Flame Graph: Only show the flame graph
-- Both: Show both the top table and flame graph
-
-![Figure 7 - Show the top table / flame graph / both](/static/img/docs/flame-graph-panel/selected-view.png 'Figure 7 - Show the top table / flame graph / both')
-
-## Data API
-
-In order to render the flame graph, you must format the data frame data using a [nested set model](https://en.wikipedia.org/wiki/Nested_set_model).
-
-A nested set model ensures each item of the flame graph is encoded just by its nesting level as an integer value, its metadata, and by its order in the data frame. This means that the order of items is significant and needs to be correct. The ordering is a depth-first traversal of the items in the flame graph which recreates the graph without needing variable-length values in the data frame like in a children's array.
+A nested set model ensures each item of a flame graph is encoded by its nesting level as an integer value, its metadata, and by its order in the data frame. This means that the order of items is significant and needs to be correct. The ordering is a depth-first traversal of the items in the flame graph which recreates the graph without needing variable-length values in the data frame like in a children's array.
 
 Required fields:
 
-| Field name | Type   | Description                                                                                                                |
-| ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------- |
-| level      | number | The nesting level of the item. In other words how many items are between this item and the top item of the flame graph.    |
-| value      | number | The absolute or cumulative value of the item. This translates to the width of the item in the graph.                       |
-| label      | string | Label to be shown for the particular item.                                                                                 |
-| self       | number | Self value which is usually the cumulative value of the item minus the sum of cumulative values of its immediate children. |
+| Field name | Type   | Description                                                                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------- |
+| level      | number | The nesting level of the item. In other words how many items are between this item and the top item of the flame graph.     |
+| value      | number | The absolute or cumulative value of the item. This translates to the width of the item in the graph.                        |
+| label      | string | Label to be shown for the particular item.                                                                                  |
+| self       | number | Self value, which is usually the cumulative value of the item minus the sum of cumulative values of its immediate children. |
+
+### Example
+
+The following table is an example of the type of data you need for a flame graph visualization and how it should be formatted:
+
+| level | value    | self   | label                                     |
+| ----- | -------- | ------ | ----------------------------------------- |
+| 0     | 16.5 Bil | 16.5 K | total                                     |
+| 1     | 4.10 Bil | 4.10 k | test/pkg/agent.(\*Target).start.func1     |
+| 2     | 4.10 Bil | 4.10 K | test/pkg/agent.(\*Target).start.func1     |
+| 3     | 3.67 Bil | 3.67 K | test/pkg/distributor.(\*Distributor).Push |
+| 4     | 1.13 Bil | 1.13 K | compress/gzip.(\*Writer).Write            |
+| 5     | 1.06 Bil | 1.06 K | compress/flat.(\*compressor).write        |
+
+## Modes
+
+### Flame graph mode
+
+A flame graph takes advantage of the hierarchical nature of profiling data. It condenses data into a format that allows you to easily see which code paths are consuming the most system resources, such as CPU time, allocated objects, or space when measuring memory. Each block in the flame graph represents a function call in a stack and its width represents its value.
+
+Grayed-out sections are a set of functions that represent a relatively small value and they are collapsed together into one section for performance reasons.
+
+{{< figure src="/static/img/docs/flame-graph-panel/flame-graph-mode-dark.png" max-width="650px" alt="A flame graph visualization for a system profile with flame graph mode." >}}
+
+You can hover over a specific function to view a tooltip that shows you additional data about that function, like the function's value, percentage of total value, and the number of samples with that function.
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-tooltip.png" max-width="650px" alt="A flame graph visualization with a hover tooltip." >}}
+
+#### Drop-down actions
+
+You can click a function to show a drop-down menu with additional actions:
+
+- Focus block
+- Copy function name
+- Sandwich view
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-dropdown.png" max-width="650px" alt="A flame graph visualization with drop-down actions." >}}
+
+##### Focus block
+
+When you click **Focus block**, the block, or function, is set to 100% of the flame graph's width and all its child functions are shown with their widths updated relative to the width of the parent function. This makes it easier to drill down into smaller parts of the flame graph.
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-focus.png" max-width="650px" alt="A flame graph visualization with focus block action selected." >}}
+
+##### Copy function name
+
+When you click **Copy function name**, the full name of the function that the block represents is copied.
+
+##### Sandwich view
+
+The sandwich view allows you to show the context of the clicked function. It shows all the function's callers on the top and all the callees at the bottom. This shows the aggregated context of the function so if the function exists in multiple places in the flame graph, all the contexts are shown and aggregated in the sandwich view.
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-sandwich.png" max-width="650px" alt="A flame graph visualization with sandwich view selected.">}}
+
+#### Status bar
+
+The status bar shows metadata about the flame graph and currently applied modifications, like what part of the graph is in focus or what function is shown in sandwich view. Click the **X** in the status bar pill to remove that modification.
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-status.png" max-width="1025px" alt="A flame graph visualization's status bar.">}}
+
+### Top table mode
+
+The top table shows the functions from the profile in table format. The table has three columns: symbols, self, and total. The table is sorted by self time by default, but can be reordered by total time or symbol name by clicking the column headers. Each row represents aggregated values for the given function if the function appears in multiple places in the profile.
+
+{{< figure src="/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-table.png" max-width="650px" alt="Table view">}}
+
+There are also action buttons on the left-most side of each row. The first button searches for the function name while second button shows the sandwich view of the function.
+
+## Toolbar
+
+### Search
+
+You can use the search field to find functions with a particular name. All the functions in the flame graph that match the search will remain colored while the rest of the functions are grayed-out.
+
+{{< figure src="/static/img/docs/flame-graph-panel/flame-graph-search-dark.png" max-width="1025px" alt="Searching for a function name in a flame graph visualization.">}}
+
+### Color schema picker
+
+You can switch between coloring functions by their value or by their package name to visually tie functions from the same package together.
+
+![<Different color scheme>](/media/docs/grafana/panels-visualizations/flamegraph/screenshot-flamegraph-10.1-color.png)
+
+### Text align
+
+Align text either to the left or to the right to show more important parts of the function name when it does not fit into the block.
+
+### Visualization picker
+
+You can choose to show only the flame graph, only table, or both at the same time

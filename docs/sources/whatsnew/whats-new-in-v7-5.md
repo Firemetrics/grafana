@@ -3,20 +3,25 @@ _build:
   list: false
 aliases:
   - ../guides/whats-new-in-v7-5/
-description: Feature and improvement highlights for Grafana v7.5
+description: Learn about new and updated features in Grafana v7.5
 keywords:
   - grafana
   - new
   - documentation
   - '7.5'
   - release notes
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: What's new in Grafana v7.5
 weight: -32
 ---
 
 # What's new in Grafana v7.5
 
-This topic includes the release notes for Grafana v7.5. For all details, read the full [CHANGELOG.md](https://github.com/grafana/grafana/blob/master/CHANGELOG.md).
+This topic includes the release notes for Grafana v7.5. For all details, read the full [CHANGELOG.md](https://github.com/grafana/grafana/blob/main/CHANGELOG.md).
 
 ## Grafana OSS features
 

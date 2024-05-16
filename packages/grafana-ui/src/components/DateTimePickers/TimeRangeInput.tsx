@@ -1,22 +1,18 @@
 import { css, cx } from '@emotion/css';
 import React, { FormEvent, MouseEvent, useState } from 'react';
 
-import { dateMath, dateTime, getDefaultTimeRange, GrafanaTheme2, TimeRange, TimeZone } from '@grafana/data';
+import { dateTime, getDefaultTimeRange, GrafanaTheme2, TimeRange, TimeZone } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
-import { stylesFactory } from '../../themes';
-import { useTheme2 } from '../../themes/ThemeContext';
+import { useStyles2 } from '../../themes/ThemeContext';
 import { ClickOutsideWrapper } from '../ClickOutsideWrapper/ClickOutsideWrapper';
 import { Icon } from '../Icon/Icon';
 import { getInputStyles } from '../Input/Input';
 
-import { TimePickerButtonLabel } from './TimeRangePicker';
 import { TimePickerContent } from './TimeRangePicker/TimePickerContent';
+import { TimeRangeLabel } from './TimeRangePicker/TimeRangeLabel';
 import { quickOptions } from './options';
-
-const isValidTimeRange = (range: TimeRange) => {
-  return dateMath.isValid(range.from) && dateMath.isValid(range.to);
-};
+import { isValidTimeRange } from './utils';
 
 export interface TimeRangeInputProps {
   value: TimeRange;
@@ -50,8 +46,7 @@ export const TimeRangeInput = ({
   showIcon = false,
 }: TimeRangeInputProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const theme = useTheme2();
-  const styles = getStyles(theme, disabled);
+  const styles = useStyles2(getStyles, disabled);
 
   const onOpen = (event: FormEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -71,7 +66,7 @@ export const TimeRangeInput = ({
     onChange(timeRange);
   };
 
-  const onRangeClear = (event: MouseEvent<HTMLDivElement>) => {
+  const onRangeClear = (event: MouseEvent<SVGElement>) => {
     event.stopPropagation();
     const from = dateTime(null);
     const to = dateTime(null);
@@ -83,15 +78,12 @@ export const TimeRangeInput = ({
       <button
         type="button"
         className={styles.pickerInput}
-        aria-label={selectors.components.TimePicker.openButton}
+        data-testid={selectors.components.TimePicker.openButton}
         onClick={onOpen}
       >
         {showIcon && <Icon name="clock-nine" size={'sm'} className={styles.icon} />}
-        {isValidTimeRange(value) ? (
-          <TimePickerButtonLabel value={value} timeZone={timeZone} />
-        ) : (
-          <span className={styles.placeholder}>{placeholder}</span>
-        )}
+
+        <TimeRangeLabel value={value} timeZone={timeZone} placeholder={placeholder} />
 
         {!disabled && (
           <span className={styles.caretIcon}>
@@ -121,52 +113,52 @@ export const TimeRangeInput = ({
   );
 };
 
-const getStyles = stylesFactory((theme: GrafanaTheme2, disabled = false) => {
+const getStyles = (theme: GrafanaTheme2, disabled = false) => {
   const inputStyles = getInputStyles({ theme, invalid: false });
   return {
-    container: css`
-      display: flex;
-      position: relative;
-    `,
-    content: css`
-      margin-left: 0;
-      position: absolute;
-      top: 116%;
-      z-index: ${theme.zIndex.dropdown};
-    `,
+    container: css({
+      display: 'flex',
+      position: 'relative',
+    }),
+    content: css({
+      marginLeft: 0,
+      position: 'absolute',
+      top: '116%',
+      zIndex: theme.zIndex.dropdown,
+    }),
     pickerInput: cx(
       inputStyles.input,
       disabled && inputStyles.inputDisabled,
       inputStyles.wrapper,
-      css`
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        cursor: pointer;
-        padding-right: 0;
-        line-height: ${theme.spacing.gridSize * 4 - 2}px;
-      `
+      css({
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        paddingRight: 0,
+        lineHeight: `${theme.spacing.gridSize * 4 - 2}px`,
+      })
     ),
     caretIcon: cx(
       inputStyles.suffix,
-      css`
-        position: relative;
-        top: -1px;
-        margin-left: ${theme.spacing(0.5)};
-      `
+      css({
+        position: 'relative',
+        top: '-1px',
+        marginLeft: theme.spacing(0.5),
+      })
     ),
-    clearIcon: css`
-      margin-right: ${theme.spacing(0.5)};
-      &:hover {
-        color: ${theme.colors.text.maxContrast};
-      }
-    `,
-    placeholder: css`
-      color: ${theme.colors.text.disabled};
-      opacity: 1;
-    `,
-    icon: css`
-      margin-right: ${theme.spacing(0.5)};
-    `,
+    clearIcon: css({
+      marginRight: theme.spacing(0.5),
+      '&:hover': {
+        color: theme.colors.text.maxContrast,
+      },
+    }),
+    placeholder: css({
+      color: theme.colors.text.disabled,
+      opacity: 1,
+    }),
+    icon: css({
+      marginRight: theme.spacing(0.5),
+    }),
   };
-});
+};

@@ -1,10 +1,13 @@
 import React from 'react';
-import { of } from 'rxjs';
+import { Props } from 'react-virtualized-auto-sizer';
 
-import { serializeStateToUrlParam } from '@grafana/data';
+import { EventBusSrv, serializeStateToUrlParam } from '@grafana/data';
 import { config } from '@grafana/runtime';
+import { DataQuery } from '@grafana/schema';
+import store from 'app/core/store';
 
 import { silenceConsoleOutput } from '../../../../test/core/utils/silenceConsoleOutput';
+import * as localStorage from '../../../core/history/RichHistoryLocalStorage';
 
 import {
   assertDataSourceFilterVisibility,
@@ -13,12 +16,12 @@ import {
   assertQueryHistoryComment,
   assertQueryHistoryElementsShown,
   assertQueryHistoryExists,
-  assertQueryHistoryIsStarred,
+  assertQueryHistoryIsEmpty,
   assertQueryHistoryTabIsSelected,
 } from './helper/assert';
 import {
-  commentQueryHistory,
   closeQueryHistory,
+  commentQueryHistory,
   deleteQueryHistory,
   inputQuery,
   loadMoreQueryHistory,
@@ -26,29 +29,31 @@ import {
   runQuery,
   selectOnlyActiveDataSource,
   selectStarredTabFirst,
-  starQueryHistory,
   switchToQueryHistoryTab,
 } from './helper/interactions';
 import { makeLogsQueryResponse } from './helper/query';
 import { setupExplore, tearDown, waitForExplore } from './helper/setup';
 
-const fetchMock = jest.fn();
-const postMock = jest.fn();
-const getMock = jest.fn();
 const reportInteractionMock = jest.fn();
+const testEventBus = new EventBusSrv();
+
+interface MockQuery extends DataQuery {
+  expr: string;
+}
+
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
-  getBackendSrv: () => ({ fetch: fetchMock, post: postMock, get: getMock }),
   reportInteraction: (...args: object[]) => {
     reportInteractionMock(...args);
   },
+  getAppEvents: () => testEventBus,
 }));
 
 jest.mock('app/core/core', () => ({
   contextSrv: {
     hasPermission: () => true,
-    hasAccess: () => true,
     isSignedIn: true,
+    getValidIntervals: (defaultIntervals: string[]) => defaultIntervals,
   },
 }));
 
@@ -65,11 +70,15 @@ jest.mock('app/core/services/PreferencesService', () => ({
   },
 }));
 
+jest.mock('../hooks/useExplorePageTitle', () => ({
+  useExplorePageTitle: jest.fn(),
+}));
+
 jest.mock('react-virtualized-auto-sizer', () => {
   return {
     __esModule: true,
-    default(props: any) {
-      return <div>{props.children({ width: 1000 })}</div>;
+    default(props: Props) {
+      return <div>{props.children({ height: 1, scaledHeight: 1, scaledWidth: 1000, width: 1000 })}</div>;
     },
   };
 });
@@ -82,9 +91,6 @@ describe('Explore: Query History', () => {
 
   afterEach(() => {
     config.queryHistoryEnabled = false;
-    fetchMock.mockClear();
-    postMock.mockClear();
-    getMock.mockClear();
     reportInteractionMock.mockClear();
     tearDown();
   });
@@ -105,6 +111,8 @@ describe('Explore: Query History', () => {
 
     // when Explore is opened again
     unmount();
+
+    tearDown({ clearLocalStorage: false });
     setupExplore({ clearLocalStorage: false });
     await waitForExplore();
 
@@ -136,47 +144,53 @@ describe('Explore: Query History', () => {
     await assertQueryHistory(['{"expr":"query #2"}', '{"expr":"query #1"}']);
   });
 
-  // FIXME: flaky test
-  it.skip('updates the state in both Explore panes', async () => {
+  it('does not add query if quota exceeded error is reached', async () => {
     const urlParams = {
       left: serializeStateToUrlParam({
         datasource: 'loki',
         queries: [{ refId: 'A', expr: 'query #1' }],
         range: { from: 'now-1h', to: 'now' },
       }),
-      right: serializeStateToUrlParam({
+    };
+
+    const { datasources } = setupExplore({ urlParams });
+    jest.mocked(datasources.loki.query).mockReturnValueOnce(makeLogsQueryResponse());
+    await waitForExplore();
+    await openQueryHistory();
+
+    const storeSpy = jest.spyOn(store, 'setObject').mockImplementation(() => {
+      const error = new Error('QuotaExceededError');
+      error.name = 'QuotaExceededError';
+      throw error;
+    });
+
+    await inputQuery('query #2');
+    await runQuery();
+    await assertQueryHistory(['{"expr":"query #1"}']);
+    storeSpy.mockRestore();
+  });
+
+  it('does add query if limit exceeded error is reached', async () => {
+    const urlParams = {
+      left: serializeStateToUrlParam({
         datasource: 'loki',
-        queries: [{ refId: 'A', expr: 'query #2' }],
+        queries: [{ refId: 'A', expr: 'query #1' }],
         range: { from: 'now-1h', to: 'now' },
       }),
     };
 
     const { datasources } = setupExplore({ urlParams });
-    jest.mocked(datasources.loki.query).mockReturnValue(makeLogsQueryResponse());
+    jest.mocked(datasources.loki.query).mockReturnValueOnce(makeLogsQueryResponse());
     await waitForExplore();
-    await waitForExplore('right');
+    await openQueryHistory();
 
-    // queries in history
-    await openQueryHistory('left');
-    await assertQueryHistory(['{"expr":"query #2"}', '{"expr":"query #1"}'], 'left');
-    await openQueryHistory('right');
-    await assertQueryHistory(['{"expr":"query #2"}', '{"expr":"query #1"}'], 'right');
-
-    // star one one query
-    await starQueryHistory(1, 'left');
-    await assertQueryHistoryIsStarred([false, true], 'left');
-    await assertQueryHistoryIsStarred([false, true], 'right');
-    expect(reportInteractionMock).toBeCalledWith('grafana_explore_query_history_starred', {
-      queryHistoryEnabled: false,
-      newValue: true,
+    jest.spyOn(localStorage, 'checkLimits').mockImplementationOnce((queries) => {
+      return { queriesToKeep: queries, limitExceeded: true };
     });
 
-    await deleteQueryHistory(0, 'left');
-    await assertQueryHistory(['{"expr":"query #1"}'], 'left');
-    await assertQueryHistory(['{"expr":"query #1"}'], 'right');
-    expect(reportInteractionMock).toBeCalledWith('grafana_explore_query_history_deleted', {
-      queryHistoryEnabled: false,
-    });
+    await inputQuery('query #2');
+    await runQuery();
+    await assertQueryHistory(['{"expr":"query #2"}', '{"expr":"query #1"}']);
   });
 
   it('add comments to query history', async () => {
@@ -192,10 +206,34 @@ describe('Explore: Query History', () => {
     jest.mocked(datasources.loki.query).mockReturnValueOnce(makeLogsQueryResponse());
     await waitForExplore();
     await openQueryHistory();
-    await assertQueryHistory(['{"expr":"query #1"}'], 'left');
-
+    await assertQueryHistory(['{"expr":"query #1"}']);
     await commentQueryHistory(0, 'test comment');
-    await assertQueryHistoryComment(['test comment'], 'left');
+    await assertQueryHistoryComment(['test comment']);
+  });
+
+  it('removes the query item from the history panel when user deletes a regular query', async () => {
+    const urlParams = {
+      left: serializeStateToUrlParam({
+        datasource: 'loki',
+        queries: [{ refId: 'A', expr: 'query #1' }],
+        range: { from: 'now-1h', to: 'now' },
+      }),
+    };
+
+    const { datasources } = setupExplore({ urlParams });
+    jest.mocked(datasources.loki.query).mockReturnValueOnce(makeLogsQueryResponse());
+
+    await waitForExplore();
+    await openQueryHistory();
+
+    // queries in history
+    await assertQueryHistory(['{"expr":"query #1"}']);
+
+    // delete query
+    await deleteQueryHistory(0);
+
+    // there was only one query in history so assert that query history is empty
+    await assertQueryHistoryIsEmpty();
   });
 
   it('updates query history settings', async () => {
@@ -222,13 +260,15 @@ describe('Explore: Query History', () => {
 
   it('pagination', async () => {
     config.queryHistoryEnabled = true;
-    const { datasources } = setupExplore();
+
+    const mockQuery: MockQuery = { refId: 'A', expr: 'query' };
+    const { datasources } = setupExplore({
+      queryHistory: {
+        queryHistory: [{ datasourceUid: 'loki', queries: [mockQuery] }],
+        totalCount: 2,
+      },
+    });
     jest.mocked(datasources.loki.query).mockReturnValueOnce(makeLogsQueryResponse());
-    fetchMock.mockReturnValue(
-      of({
-        data: { result: { queryHistory: [{ datasourceUid: 'loki', queries: [{ expr: 'query' }] }], totalCount: 2 } },
-      })
-    );
     await waitForExplore();
 
     await openQueryHistory();

@@ -1,7 +1,11 @@
 ---
 description: Install guide for Grafana on RHEL and Fedora.
-title: Install Grafana on RHEL or Fedora
+labels:
+  products:
+    - enterprise
+    - oss
 menuTitle: RHEL or Fedora
+title: Install Grafana on RHEL or Fedora
 weight: 200
 ---
 
@@ -17,16 +21,22 @@ If you install via RPM or the `.tar.gz` file, then you must manually update Graf
 
 If you install from the RPM repository, then Grafana is automatically updated every time you update your applications.
 
-| Grafana Version    | Package            | Repository                |
-| ------------------ | ------------------ | ------------------------- |
-| Grafana Enterprise | grafana-enterprise | `https://rpm.grafana.com` |
-| Grafana OSS        | grafana            | `https://rpm.grafana.com` |
+| Grafana Version           | Package            | Repository                     |
+| ------------------------- | ------------------ | ------------------------------ |
+| Grafana Enterprise        | grafana-enterprise | `https://rpm.grafana.com`      |
+| Grafana Enterprise (Beta) | grafana-enterprise | `https://rpm-beta.grafana.com` |
+| Grafana OSS               | grafana            | `https://rpm.grafana.com`      |
+| Grafana OSS (Beta)        | grafana            | `https://rpm-beta.grafana.com` |
 
 {{% admonition type="note" %}}
 Grafana Enterprise is the recommended and default edition. It is available for free and includes all the features of the OSS edition. You can also upgrade to the [full Enterprise feature set](/products/enterprise/?utm_source=grafana-install-page), which has support for [Enterprise plugins](/grafana/plugins/?enterprise=1&utcm_source=grafana-install-page).
 {{% /admonition %}}
 
 To install Grafana from the RPM repository, complete the following steps:
+
+{{% admonition type="note" %}}
+If you wish to install beta versions of Grafana, substitute the repository URL for the beta URL listed above.
+{{% /admonition %}}
 
 1. Import the GPG key:
 
@@ -47,12 +57,6 @@ To install Grafana from the RPM repository, complete the following steps:
    gpgkey=https://rpm.grafana.com/gpg.key
    sslverify=1
    sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-   ```
-
-1. To prevent beta versions from being installed, add the following exclude line to your `.repo` file.
-
-   ```bash
-   exclude=*beta*
    ```
 
 1. To install Grafana OSS, run the following command:
@@ -99,6 +103,40 @@ Complete the following steps to install Grafana using the standalone binaries:
    - **Open Source:** This version is functionally identical to the Enterprise version, but you will need to download the Enterprise version if you want Enterprise features.
 1. Depending on which system you are running, click the **Linux** or **ARM** tab on the [download page](/grafana/download).
 1. Copy and paste the code from the [download page](/grafana/download) page into your command line and run.
+
+## Uninstall on RHEL or Fedora
+
+To uninstall Grafana, run the following commands in a terminal window:
+
+1. If you configured Grafana to run with systemd, stop the systemd service for Grafana server:
+
+   ```shell
+   sudo systemctl stop grafana-server
+   ```
+
+1. If you configured Grafana to run with init.d, stop the init.d service for Grafana server:
+
+   ```shell
+   sudo service grafana-server stop
+   ```
+
+1. To uninstall Grafana OSS:
+
+   ```shell
+   sudo dnf remove grafana
+   ```
+
+1. To uninstall Grafana Enterprise:
+
+   ```shell
+   sudo dnf remove grafana-enterprise
+   ```
+
+1. Optional: To remove the Grafana repository:
+
+   ```shell
+   sudo rm -i /etc/yum.repos.d/grafana.repo
+   ```
 
 ## Next steps
 

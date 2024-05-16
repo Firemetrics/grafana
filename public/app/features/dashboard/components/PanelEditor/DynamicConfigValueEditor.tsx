@@ -53,30 +53,29 @@ export const DynamicConfigValueEditor = ({
   /* eslint-disable react/display-name */
   const renderLabel =
     (includeDescription = true, includeCounter = false) =>
-    (isExpanded = false) =>
-      (
-        <HorizontalGroup justify="space-between">
-          <Label
-            category={labelCategory}
-            description={includeDescription ? item.description : undefined}
-            htmlFor={componentId}
-          >
-            <Highlighter
-              textToHighlight={item.name}
-              searchWords={[searchQuery]}
-              highlightClassName={'search-fragment-highlight'}
-            />
-            {!isExpanded && includeCounter && item.getItemsCount && (
-              <Counter value={item.getItemsCount(property.value)} />
-            )}
-          </Label>
-          {!isSystemOverride && (
-            <div>
-              <IconButton name="times" onClick={onRemove} tooltip="Remove label" />
-            </div>
+    (isExpanded = false) => (
+      <HorizontalGroup justify="space-between">
+        <Label
+          category={labelCategory}
+          description={includeDescription ? item.description : undefined}
+          htmlFor={componentId}
+        >
+          <Highlighter
+            textToHighlight={item.name}
+            searchWords={[searchQuery]}
+            highlightClassName={'search-fragment-highlight'}
+          />
+          {!isExpanded && includeCounter && item.getItemsCount && (
+            <Counter value={item.getItemsCount(property.value)} />
           )}
-        </HorizontalGroup>
-      );
+        </Label>
+        {!isSystemOverride && (
+          <div>
+            <IconButton name="times" onClick={onRemove} tooltip="Remove label" />
+          </div>
+        )}
+      </HorizontalGroup>
+    );
   /* eslint-enable react/display-name */
 
   if (isCollapsible) {
@@ -84,10 +83,10 @@ export const DynamicConfigValueEditor = ({
       <OptionsPaneCategory
         id={item.name}
         renderTitle={renderLabel(false, true)}
-        className={css`
-          padding-left: 0;
-          padding-right: 0;
-        `}
+        className={css({
+          paddingLeft: 0,
+          paddingRight: 0,
+        })}
         isNested
         isOpenDefault={property.value !== undefined}
       >
@@ -131,13 +130,11 @@ export const DynamicConfigValueEditor = ({
   );
 };
 
-const getStyles = (theme: GrafanaTheme2) => {
-  return {
-    collapsibleOverrideEditor: css`
-      label: collapsibleOverrideEditor;
-      & + .dynamicConfigValueEditor--nonCollapsible {
-        margin-top: ${theme.spacing(1)};
-      }
-    `,
-  };
-};
+const getStyles = (theme: GrafanaTheme2) => ({
+  collapsibleOverrideEditor: css({
+    label: 'collapsibleOverrideEditor',
+    '& + .dynamicConfigValueEditor--nonCollapsible': {
+      marginTop: theme.spacing(1),
+    },
+  }),
+});

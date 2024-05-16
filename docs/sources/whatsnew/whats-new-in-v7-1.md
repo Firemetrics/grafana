@@ -3,20 +3,25 @@ _build:
   list: false
 aliases:
   - ../guides/whats-new-in-v7-1/
-description: Feature and improvement highlights for Grafana v7.1
+description: Learn about new and updated features in Grafana v7.1
 keywords:
   - grafana
   - new
   - documentation
   - '7.1'
   - release notes
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: What's new in Grafana v7.1
 weight: -28
 ---
 
 # What's new in Grafana v7.1
 
-This topic includes the release notes for the Grafana v7.1. For all details, read the full [CHANGELOG.md](https://github.com/grafana/grafana/blob/master/CHANGELOG.md).
+This topic includes the release notes for the Grafana v7.1. For all details, read the full [CHANGELOG.md](https://github.com/grafana/grafana/blob/main/CHANGELOG.md).
 
 The main highlights are:
 
@@ -111,4 +116,4 @@ With Grafana Enterprise 7.1, you can generate reports on a [monthly schedule]({{
 
 ## Changelog
 
-Check out [CHANGELOG.md](https://github.com/grafana/grafana/blob/master/CHANGELOG.md) for a complete list of new features, changes, and bug fixes.
+Check out [CHANGELOG.md](https://github.com/grafana/grafana/blob/main/CHANGELOG.md) for a complete list of new features, changes, and bug fixes.

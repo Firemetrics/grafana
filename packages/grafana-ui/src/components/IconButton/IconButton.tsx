@@ -3,11 +3,11 @@ import React from 'react';
 
 import { GrafanaTheme2, colorManipulator, deprecationWarning } from '@grafana/data';
 
-import { useTheme2, stylesFactory } from '../../themes';
+import { useStyles2 } from '../../themes';
 import { getFocusStyles, getMouseFocusStyles } from '../../themes/mixins';
 import { ComponentSize } from '../../types';
 import { IconName, IconSize, IconType } from '../../types/icon';
-import { Icon } from '../Icon/Icon';
+import { IconRenderer } from '../Button';
 import { getSvgSize } from '../Icon/utils';
 import { TooltipPlacement, PopoverContent, Tooltip } from '../Tooltip';
 
@@ -44,8 +44,6 @@ export type Props = BasePropsWithTooltip | BasePropsWithAriaLabel;
 
 export const IconButton = React.forwardRef<HTMLButtonElement, Props>((props, ref) => {
   const { size = 'md', variant = 'secondary' } = props;
-
-  const theme = useTheme2();
   let limitedIconSize: LimitedIconSize;
 
   // very large icons (xl to xxxl) are unified to size xl
@@ -56,7 +54,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, Props>((props, ref
     limitedIconSize = size;
   }
 
-  const styles = getStyles(theme, limitedIconSize, variant);
+  const styles = useStyles2(getStyles, limitedIconSize, variant);
 
   let ariaLabel: string | undefined;
   let buttonRef: typeof ref | undefined;
@@ -82,7 +80,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, Props>((props, ref
           className={cx(styles.button, className)}
           type="button"
         >
-          <Icon name={name} size={limitedIconSize} className={styles.icon} type={iconType} />
+          <IconRenderer icon={name} size={limitedIconSize} className={styles.icon} iconType={iconType} />
         </button>
       </Tooltip>
     );
@@ -96,7 +94,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, Props>((props, ref
         className={cx(styles.button, className)}
         type="button"
       >
-        <Icon name={name} size={limitedIconSize} className={styles.icon} type={iconType} />
+        <IconRenderer icon={name} size={limitedIconSize} className={styles.icon} iconType={iconType} />
       </button>
     );
   }
@@ -104,7 +102,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, Props>((props, ref
 
 IconButton.displayName = 'IconButton';
 
-const getStyles = stylesFactory((theme: GrafanaTheme2, size, variant: IconButtonVariant) => {
+const getStyles = (theme: GrafanaTheme2, size: IconSize, variant: IconButtonVariant) => {
   // overall size of the IconButton on hover
   // theme.spacing.gridSize originates from 2*4px for padding and letting the IconSize generally decide on the hoverSize
   const hoverSize = getSvgSize(size) + theme.spacing.gridSize;
@@ -118,59 +116,54 @@ const getStyles = stylesFactory((theme: GrafanaTheme2, size, variant: IconButton
   }
 
   return {
-    button: css`
-      z-index: 0;
-      position: relative;
-      margin: 0 ${theme.spacing(0.5)} 0 0;
-      box-shadow: none;
-      border: none;
-      display: inline-flex;
-      background: transparent;
-      justify-content: center;
-      align-items: center;
-      padding: 0;
-      color: ${iconColor};
+    button: css({
+      zIndex: 0,
+      position: 'relative',
+      margin: `0 ${theme.spacing.x0_5} 0 0`,
+      boxShadow: 'none',
+      border: 'none',
+      display: 'inline-flex',
+      background: 'transparent',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 0,
+      color: iconColor,
 
-      &[disabled],
-      &:disabled {
-        cursor: not-allowed;
-        color: ${theme.colors.action.disabledText};
-        opacity: 0.65;
-      }
+      '&[disabled], &:disabled': {
+        cursor: 'not-allowed',
+        color: theme.colors.action.disabledText,
+        opacity: 0.65,
+      },
 
-      &:before {
-        z-index: -1;
-        position: absolute;
-        opacity: 0;
-        width: ${hoverSize}px;
-        height: ${hoverSize}px;
-        border-radius: ${theme.shape.radius.default};
-        content: '';
-        transition-duration: 0.2s;
-        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-        transition-property: opacity;
-      }
+      '&:before': {
+        zIndex: -1,
+        position: 'absolute',
+        opacity: 0,
+        width: `${hoverSize}px`,
+        height: `${hoverSize}px`,
+        borderRadius: theme.shape.radius.default,
+        content: '""',
+        [theme.transitions.handleMotion('no-preference', 'reduce')]: {
+          transitionDuration: '0.2s',
+          transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          transitionProperty: 'opacity',
+        },
+      },
 
-      &:focus,
-      &:focus-visible {
-        ${getFocusStyles(theme)}
-      }
+      '&:focus, &:focus-visible': getFocusStyles(theme),
 
-      &:focus:not(:focus-visible) {
-        ${getMouseFocusStyles(theme)}
-      }
+      '&:focus:not(:focus-visible)': getMouseFocusStyles(theme),
 
-      &:hover {
-        &:before {
-          background-color: ${variant === 'secondary'
-            ? theme.colors.action.hover
-            : colorManipulator.alpha(iconColor, 0.12)};
-          opacity: 1;
-        }
-      }
-    `,
-    icon: css`
-      vertical-align: baseline;
-    `,
+      '&:hover': {
+        '&:before': {
+          backgroundColor:
+            variant === 'secondary' ? theme.colors.action.hover : colorManipulator.alpha(iconColor, 0.12),
+          opacity: 1,
+        },
+      },
+    }),
+    icon: css({
+      verticalAlign: 'baseline',
+    }),
   };
-});
+};

@@ -3,7 +3,6 @@ import React, { useMemo, useEffect } from 'react';
 import AutoSizer from 'react-virtualized-auto-sizer';
 
 import { PanelPlugin, GrafanaTheme2, FeatureState } from '@grafana/data';
-import { Stack } from '@grafana/experimental';
 import { config } from '@grafana/runtime';
 import {
   Drawer,
@@ -21,6 +20,7 @@ import {
   Select,
   ClipboardButton,
   Icon,
+  Stack,
 } from '@grafana/ui';
 import { contextSrv } from 'app/core/services/context_srv';
 import { PanelModel } from 'app/features/dashboard/state';
@@ -66,15 +66,13 @@ export function HelpWizard({ panel, plugin, onClose }: Props) {
   ];
 
   const hasSupportBundleAccess =
-    config.supportBundlesEnabled &&
-    contextSrv.hasAccess(AccessControlAction.ActionSupportBundlesCreate, contextSrv.isGrafanaAdmin);
+    config.supportBundlesEnabled && contextSrv.hasPermission(AccessControlAction.ActionSupportBundlesCreate);
 
   return (
     <Drawer
       title={`Get help with this panel`}
       size="lg"
       onClose={onClose}
-      scrollableContent
       subtitle={
         <Stack direction="column" gap={1}>
           <Stack direction="row" gap={1}>
@@ -214,24 +212,22 @@ export function HelpWizard({ panel, plugin, onClose }: Props) {
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  code: css`
-    flex-grow: 1;
-    height: 100%;
-    overflow: scroll;
-  `,
-  field: css`
-    width: 100%;
-  `,
-  opts: css`
-    display: flex;
-    display: flex;
-    width: 100%;
-    flex-grow: 0;
-    align-items: center;
-    justify-content: flex-end;
-
-    button {
-      margin-left: 8px;
-    }
-  `,
+  code: css({
+    flexGrow: 1,
+    height: '100%',
+    overflow: 'scroll',
+  }),
+  field: css({
+    width: '100%',
+  }),
+  opts: css({
+    display: 'flex',
+    width: '100%',
+    flexGrow: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    button: {
+      marginLeft: '8px',
+    },
+  }),
 });

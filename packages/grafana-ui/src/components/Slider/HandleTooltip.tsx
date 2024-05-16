@@ -1,16 +1,10 @@
 import { css } from '@emotion/css';
-import Tooltip from 'rc-tooltip';
+import Tooltip, { TooltipRef } from 'rc-tooltip';
 import React, { useEffect, useRef } from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
 import { useStyles2 } from '../../themes/ThemeContext';
-
-interface RCTooltipRef {
-  // rc-tooltip's ref is essentially untyped, so we be cautious by saying the function is
-  // potentially undefined which, given rc's track record, seems likely :)
-  forcePopupAlign?: () => {};
-}
 
 const HandleTooltip = (props: {
   value: number;
@@ -21,7 +15,7 @@ const HandleTooltip = (props: {
 }) => {
   const { value, children, visible, placement, tipFormatter, ...restProps } = props;
 
-  const tooltipRef = useRef<RCTooltipRef>();
+  const tooltipRef = useRef<TooltipRef>(null);
   const rafRef = useRef<number | null>(null);
   const styles = useStyles2(tooltipStyles);
 
@@ -33,7 +27,7 @@ const HandleTooltip = (props: {
 
   function keepAlign() {
     rafRef.current = requestAnimationFrame(() => {
-      tooltipRef.current?.forcePopupAlign?.();
+      tooltipRef.current?.forceAlign();
     });
   }
 

@@ -4,6 +4,10 @@ aliases:
   - ../../../enterprise/access-control/manage-role-assignments/manage-built-in-role-assignments/
   - ../../../enterprise/access-control/manage-role-assignments/manage-user-role-assignments/
 description: Learn how to assign RBAC roles to users and teams in Grafana.
+labels:
+  products:
+    - cloud
+    - enterprise
 menuTitle: Assign RBAC roles
 title: Assign Grafana RBAC roles
 weight: 40
@@ -50,14 +54,14 @@ In both cases, the assignment applies only to the user, team or service account 
 
    For more information about switching organizations, refer to [Switch organizations]({{< relref "../../../user-management/user-preferences/_index.md#switch-organizations" >}}).
 
-3. In the left-side menu, click **Administration** and then **Users**, **Teams**, or **Service accounts**.
+3. In the left-side menu, click **Administration**, **Users and access**, and then **Users**, **Teams**, or **Service accounts**.
 4. In the **Role** column, select the fixed role that you want to assign to the user, team, or service account.
 5. Click **Update**.
 
 **To assign a fixed role as a server administrator:**
 
 1. Sign in to Grafana as a server administrator.
-1. Click **Administration** in the left-side menu, and then **Users**.
+1. Click **Administration** in the left-side menu, **Users and access**, and then **Users**.
 1. Click a user.
 1. In the Organizations section, click **Change role**.
 1. Select a role within an organization that you want to assign to the user.

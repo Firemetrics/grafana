@@ -6,7 +6,6 @@ import {
   Button,
   ConfirmButton,
   Field,
-  HorizontalGroup,
   Icon,
   Modal,
   stylesFactory,
@@ -14,6 +13,7 @@ import {
   Tooltip,
   useStyles2,
   withTheme2,
+  Stack,
 } from '@grafana/ui';
 import { UserRolePicker } from 'app/core/components/RolePicker/UserRolePicker';
 import { fetchRoleOptions, updateUserRoles } from 'app/core/components/RolePicker/api';
@@ -56,32 +56,28 @@ export class UserOrgs extends PureComponent<Props, State> {
   render() {
     const { user, orgs, isExternalUser, onOrgRoleChange, onOrgRemove, onOrgAdd } = this.props;
     const { showAddOrgModal } = this.state;
-    const addToOrgContainerClass = css`
-      margin-top: 0.8rem;
-    `;
 
     const canAddToOrg = contextSrv.hasPermission(AccessControlAction.OrgUsersAdd) && !isExternalUser;
     return (
-      <>
+      <div>
         <h3 className="page-heading">Organizations</h3>
-        <div className="gf-form-group">
-          <div className="gf-form">
-            <table className="filter-table form-inline">
-              <tbody>
-                {orgs.map((org, index) => (
-                  <OrgRow
-                    key={`${org.orgId}-${index}`}
-                    isExternalUser={isExternalUser}
-                    user={user}
-                    org={org}
-                    onOrgRoleChange={onOrgRoleChange}
-                    onOrgRemove={onOrgRemove}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className={addToOrgContainerClass}>
+        <Stack gap={1.5} direction="column">
+          <table className="filter-table form-inline">
+            <tbody>
+              {orgs.map((org, index) => (
+                <OrgRow
+                  key={`${org.orgId}-${index}`}
+                  isExternalUser={isExternalUser}
+                  user={user}
+                  org={org}
+                  onOrgRoleChange={onOrgRoleChange}
+                  onOrgRemove={onOrgRemove}
+                />
+              ))}
+            </tbody>
+          </table>
+
+          <div>
             {canAddToOrg && (
               <Button variant="secondary" onClick={this.showOrgAddModal} ref={this.addToOrgButtonRef}>
                 Add user to organization
@@ -95,8 +91,8 @@ export class UserOrgs extends PureComponent<Props, State> {
             onOrgAdd={onOrgAdd}
             onDismiss={this.dismissOrgAddModal}
           />
-        </div>
-      </>
+        </Stack>
+      </div>
     );
   }
 }
@@ -209,6 +205,8 @@ class UnThemedOrgRow extends PureComponent<OrgRowProps> {
                   roleOptions={this.state.roleOptions}
                   onBasicRoleChange={this.onBasicRoleChange}
                   basicRoleDisabled={rolePickerDisabled}
+                  basicRoleDisabledMessage="This user's role is not editable because it is synchronized from your auth provider.
+                    Refer to the Grafana authentication docs for details."
                 />
               </div>
               {isExternalUser && <ExternalUserTooltip lockMessage={lockMessage} />}
@@ -246,7 +244,6 @@ class UnThemedOrgRow extends PureComponent<OrgRowProps> {
                 confirmVariant="destructive"
                 onCancel={this.onCancelClick}
                 onConfirm={this.onOrgRemove}
-                autoFocus
               >
                 Remove from organization
               </ConfirmButton>
@@ -375,31 +372,27 @@ export class AddToOrgModal extends PureComponent<AddToOrgModalProps, AddToOrgMod
           <OrgPicker inputId="new-org-input" onSelected={this.onOrgSelect} excludeOrgs={userOrgs} autoFocus />
         </Field>
         <Field label="Role" disabled={selectedOrg === null}>
-          {contextSrv.accessControlEnabled() ? (
-            <UserRolePicker
-              userId={user?.id || 0}
-              orgId={selectedOrg?.id}
-              basicRole={role}
-              onBasicRoleChange={this.onOrgRoleChange}
-              basicRoleDisabled={false}
-              roleOptions={roleOptions}
-              apply={true}
-              onApplyRoles={this.onRoleUpdate}
-              pendingRoles={this.state.pendingRoles}
-            />
-          ) : (
-            <OrgRolePicker inputId="new-org-role-input" value={role} onChange={this.onOrgRoleChange} />
-          )}
+          <UserRolePicker
+            userId={user?.id || 0}
+            orgId={selectedOrg?.id}
+            basicRole={role}
+            onBasicRoleChange={this.onOrgRoleChange}
+            basicRoleDisabled={false}
+            roleOptions={roleOptions}
+            apply={true}
+            onApplyRoles={this.onRoleUpdate}
+            pendingRoles={this.state.pendingRoles}
+          />
         </Field>
         <Modal.ButtonRow>
-          <HorizontalGroup spacing="md" justify="center">
+          <Stack gap={2} justifyContent="center">
             <Button variant="secondary" fill="outline" onClick={this.onCancel}>
               Cancel
             </Button>
             <Button variant="primary" disabled={selectedOrg === null} onClick={this.onAddUserToOrg}>
               Add to organization
             </Button>
-          </HorizontalGroup>
+          </Stack>
         </Modal.ButtonRow>
       </Modal>
     );
@@ -486,7 +479,7 @@ interface ExternalUserTooltipProps {
   lockMessage?: string;
 }
 
-const ExternalUserTooltip = ({ lockMessage }: ExternalUserTooltipProps) => {
+export const ExternalUserTooltip = ({ lockMessage }: ExternalUserTooltipProps) => {
   const styles = useStyles2(getTooltipStyles);
 
   return (

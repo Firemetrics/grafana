@@ -16,11 +16,7 @@ package grafanaplugin
 
 import (
 	"github.com/grafana/grafana/packages/grafana-schema/src/common"
-	"github.com/grafana/grafana/pkg/plugins/pfs"
 )
-
-// This file (with its sibling .cue files) implements pfs.GrafanaPlugin
-pfs.GrafanaPlugin
 
 composableKinds: DataQuery: {
 	maturity: "experimental"
@@ -51,7 +47,7 @@ composableKinds: DataQuery: {
 
 				#LokiQueryType: "range" | "instant" | "stream" @cuetsy(kind="enum")
 
-				#SupportingQueryType: "logsVolume" | "logsSample" | "dataSample" @cuetsy(kind="enum")
+				#SupportingQueryType: "logsVolume" | "logsSample" | "dataSample" | "infiniteScroll" @cuetsy(kind="enum")
 
 				#LokiQueryDirection: "forward" | "backward" @cuetsy(kind="enum")
 			}

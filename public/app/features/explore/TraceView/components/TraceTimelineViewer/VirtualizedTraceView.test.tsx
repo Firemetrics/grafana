@@ -25,7 +25,7 @@ import VirtualizedTraceView, { VirtualizedTraceViewProps } from './VirtualizedTr
 jest.mock('./SpanTreeOffset');
 
 const trace = transformTraceData(traceGenerator.trace({ numberOfSpans: 2 }))!;
-const topOfExploreViewRef = jest.fn();
+
 let props = {
   childrenHiddenIDs: new Set(),
   childrenToggle: jest.fn(),
@@ -37,23 +37,22 @@ let props = {
   detailTagsToggle: jest.fn(),
   detailToggle: jest.fn(),
   findMatchesIDs: null,
-  registerAccessors: jest.fn(),
   setSpanNameColumnWidth: jest.fn(),
-  setTrace: jest.fn(),
   spanNameColumnWidth: 0.5,
   trace,
   uiFind: 'uiFind',
-  topOfExploreViewRef,
+  topOfViewRef: jest.fn(),
 } as unknown as VirtualizedTraceViewProps;
 
 describe('<VirtualizedTraceViewImpl>', () => {
   beforeEach(() => {
     jest.mocked(SpanTreeOffset).mockReturnValue(<div />);
-    Object.keys(props).forEach((key) => {
-      if (typeof props[key as keyof VirtualizedTraceViewProps] === 'function') {
-        (props[key as keyof VirtualizedTraceViewProps] as jest.Mock).mockReset();
+    let key: keyof VirtualizedTraceViewProps;
+    for (key in props) {
+      if (typeof props[key] === 'function') {
+        (props[key] as jest.Mock).mockReset();
       }
-    });
+    }
   });
 
   it('renders service name, operation name and duration for each span', () => {
@@ -96,13 +95,5 @@ describe('<VirtualizedTraceViewImpl>', () => {
         name: /Scroll to top/i,
       })
     ).toBeInTheDocument();
-  });
-
-  it('sets the trace for global state.traceTimeline', () => {
-    const traceID = 'some-other-id';
-    const _trace = { ...trace, traceID };
-    props = { ...props, trace: _trace };
-    render(<VirtualizedTraceView {...props} />);
-    expect(jest.mocked(props.setTrace).mock.calls).toEqual([[_trace, props.uiFind]]);
   });
 });

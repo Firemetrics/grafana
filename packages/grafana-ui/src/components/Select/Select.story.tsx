@@ -1,13 +1,12 @@
 import { auto } from '@popperjs/core';
 import { action } from '@storybook/addon-actions';
-import { Meta, Story } from '@storybook/react';
+import { Meta, StoryFn } from '@storybook/react';
 import React, { useState } from 'react';
 
 import { SelectableValue, toIconName } from '@grafana/data';
 import { Icon, Select, AsyncSelect, MultiSelect, AsyncMultiSelect } from '@grafana/ui';
 
 import { getAvailableIcons } from '../../types';
-import { withCenteredStory, withHorizontallyCenteredStory } from '../../utils/storybook/withCenteredStory';
 
 import mdx from './Select.mdx';
 import { generateOptions, generateThousandsOfOptions } from './mockOptions';
@@ -16,7 +15,6 @@ import { SelectCommonProps } from './types';
 const meta: Meta = {
   title: 'Forms/Select',
   component: Select,
-  decorators: [withCenteredStory, withHorizontallyCenteredStory],
   // SB7 has broken subcomponent types due to dropping support for the feature
   // https://github.com/storybookjs/storybook/issues/20782
   // @ts-ignore
@@ -47,7 +45,6 @@ const meta: Meta = {
         'renderControl',
         'options',
         'isOptionDisabled',
-        'maxVisibleValues',
         'aria-label',
         'noOptionsMessage',
         'menuPosition',
@@ -91,7 +88,7 @@ interface StoryProps extends Partial<SelectCommonProps<string>> {
   icon: string;
 }
 
-export const Basic: Story<StoryProps> = (args) => {
+export const Basic: StoryFn<StoryProps> = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
 
   return (
@@ -108,7 +105,8 @@ export const Basic: Story<StoryProps> = (args) => {
     </>
   );
 };
-export const BasicVirtualizedList: Story<StoryProps> = (args) => {
+
+export const BasicVirtualizedList: StoryFn<StoryProps> = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
 
   return (
@@ -126,10 +124,11 @@ export const BasicVirtualizedList: Story<StoryProps> = (args) => {
     </>
   );
 };
+
 /**
  * Uses plain values instead of SelectableValue<T>
  */
-export const BasicSelectPlainValue: Story<StoryProps> = (args) => {
+export const BasicSelectPlainValue: StoryFn<StoryProps> = (args) => {
   const [value, setValue] = useState<string>();
   return (
     <>
@@ -146,10 +145,11 @@ export const BasicSelectPlainValue: Story<StoryProps> = (args) => {
     </>
   );
 };
+
 /**
  * Uses plain values instead of SelectableValue<T>
  */
-export const SelectWithOptionDescriptions: Story = (args) => {
+export const SelectWithOptionDescriptions: StoryFn = (args) => {
   // TODO this is not working with new Select
 
   const [value, setValue] = useState<number>();
@@ -183,7 +183,7 @@ export const SelectWithOptionDescriptions: Story = (args) => {
 /**
  * Uses plain values instead of SelectableValue<T>
  */
-export const MultiPlainValue: Story = (args) => {
+export const MultiPlainValue: StoryFn = (args) => {
   const [value, setValue] = useState<string[]>();
 
   return (
@@ -192,7 +192,7 @@ export const MultiPlainValue: Story = (args) => {
         options={generateOptions()}
         value={value}
         onChange={(v) => {
-          setValue(v.map((v: any) => v.value));
+          setValue(v.map((v) => v.value!));
         }}
         prefix={getPrefix(args.icon)}
         {...args}
@@ -201,7 +201,7 @@ export const MultiPlainValue: Story = (args) => {
   );
 };
 
-export const MultiSelectWithOptionGroups: Story = (args) => {
+export const MultiSelectWithOptionGroups: StoryFn = (args) => {
   const [value, setValue] = useState<string[]>();
 
   return (
@@ -213,7 +213,7 @@ export const MultiSelectWithOptionGroups: Story = (args) => {
         ]}
         value={value}
         onChange={(v) => {
-          setValue(v.map((v: any) => v.value));
+          setValue(v.map((v) => v.value!));
           action('onChange')(v);
         }}
         prefix={getPrefix(args.icon)}
@@ -223,11 +223,11 @@ export const MultiSelectWithOptionGroups: Story = (args) => {
   );
 };
 
-export const MultiSelectBasic: Story = (args) => {
+export const MultiSelectBasic: StoryFn = (args) => {
   const [value, setValue] = useState<Array<SelectableValue<string>>>([]);
 
   return (
-    <>
+    <div style={{ maxWidth: '450px' }}>
       <MultiSelect
         options={generateOptions()}
         value={value}
@@ -238,16 +238,18 @@ export const MultiSelectBasic: Story = (args) => {
         prefix={getPrefix(args.icon)}
         {...args}
       />
-    </>
+    </div>
   );
 };
+
 MultiSelectBasic.args = {
   isClearable: false,
   closeMenuOnSelect: false,
   maxVisibleValues: 5,
+  noMultiValueWrap: false,
 };
 
-export const MultiSelectAsync: Story = (args) => {
+export const MultiSelectAsync: StoryFn = (args) => {
   const [value, setValue] = useState<Array<SelectableValue<string>>>();
 
   return (
@@ -268,7 +270,7 @@ MultiSelectAsync.args = {
   allowCustomValue: false,
 };
 
-export const BasicSelectAsync: Story = (args) => {
+export const BasicSelectAsync: StoryFn = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
 
   return (
@@ -286,7 +288,7 @@ export const BasicSelectAsync: Story = (args) => {
   );
 };
 
-export const AutoMenuPlacement: Story = (args) => {
+export const AutoMenuPlacement: StoryFn = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
 
   return (
@@ -310,7 +312,7 @@ AutoMenuPlacement.args = {
   menuPlacement: auto,
 };
 
-export const WidthAuto: Story = (args) => {
+export const WidthAuto: StoryFn = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
 
   return (
@@ -332,7 +334,7 @@ export const WidthAuto: Story = (args) => {
   );
 };
 
-export const CustomValueCreation: Story = (args) => {
+export const CustomValueCreation: StoryFn = (args) => {
   const [value, setValue] = useState<SelectableValue<string>>();
   const [customOptions, setCustomOptions] = useState<Array<SelectableValue<string>>>([]);
   const options = generateOptions();

@@ -1,9 +1,7 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
+import { useArgs } from '@storybook/preview-api';
 import { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
-
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 
 import { CollapsableSection, Props } from './CollapsableSection';
 import mdx from './CollapsableSection.mdx';
@@ -11,7 +9,6 @@ import mdx from './CollapsableSection.mdx';
 const meta: Meta<typeof CollapsableSection> = {
   title: 'Layout/CollapsableSection',
   component: CollapsableSection,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,

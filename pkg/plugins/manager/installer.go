@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/grafana/grafana/pkg/plugins"
+	"github.com/grafana/grafana/pkg/plugins/auth"
 	"github.com/grafana/grafana/pkg/plugins/config"
 	"github.com/grafana/grafana/pkg/plugins/log"
 	"github.com/grafana/grafana/pkg/plugins/manager/loader"
@@ -18,38 +19,43 @@ import (
 var _ plugins.Installer = (*PluginInstaller)(nil)
 
 type PluginInstaller struct {
-	pluginRepo     repo.Service
-	pluginStorage  storage.ZipExtractor
-	pluginRegistry registry.Service
-	pluginLoader   loader.Service
-	log            log.Logger
+	pluginRepo           repo.Service
+	pluginStorage        storage.ZipExtractor
+	pluginStorageDirFunc storage.DirNameGeneratorFunc
+	pluginRegistry       registry.Service
+	pluginLoader         loader.Service
+	log                  log.Logger
+	serviceRegistry      auth.ExternalServiceRegistry
 }
 
-func ProvideInstaller(cfg *config.Cfg, pluginRegistry registry.Service, pluginLoader loader.Service,
-	pluginRepo repo.Service) *PluginInstaller {
+func ProvideInstaller(cfg *config.PluginManagementCfg, pluginRegistry registry.Service, pluginLoader loader.Service,
+	pluginRepo repo.Service, serviceRegistry auth.ExternalServiceRegistry) *PluginInstaller {
 	return New(pluginRegistry, pluginLoader, pluginRepo,
-		storage.FileSystem(log.NewPrettyLogger("installer.fs"), cfg.PluginsPath))
+		storage.FileSystem(log.NewPrettyLogger("installer.fs"), cfg.PluginsPath), storage.SimpleDirNameGeneratorFunc, serviceRegistry)
 }
 
 func New(pluginRegistry registry.Service, pluginLoader loader.Service, pluginRepo repo.Service,
-	pluginStorage storage.ZipExtractor) *PluginInstaller {
+	pluginStorage storage.ZipExtractor, pluginStorageDirFunc storage.DirNameGeneratorFunc,
+	serviceRegistry auth.ExternalServiceRegistry) *PluginInstaller {
 	return &PluginInstaller{
-		pluginLoader:   pluginLoader,
-		pluginRegistry: pluginRegistry,
-		pluginRepo:     pluginRepo,
-		pluginStorage:  pluginStorage,
-		log:            log.New("plugin.installer"),
+		pluginLoader:         pluginLoader,
+		pluginRegistry:       pluginRegistry,
+		pluginRepo:           pluginRepo,
+		pluginStorage:        pluginStorage,
+		pluginStorageDirFunc: pluginStorageDirFunc,
+		log:                  log.New("plugin.installer"),
+		serviceRegistry:      serviceRegistry,
 	}
 }
 
 func (m *PluginInstaller) Add(ctx context.Context, pluginID, version string, opts plugins.CompatOpts) error {
-	compatOpts, err := repoCompatOpts(opts)
+	compatOpts, err := RepoCompatOpts(opts)
 	if err != nil {
 		return err
 	}
 
 	var pluginArchive *repo.PluginArchive
-	if plugin, exists := m.plugin(ctx, pluginID); exists {
+	if plugin, exists := m.plugin(ctx, pluginID, version); exists {
 		if plugin.IsCorePlugin() || plugin.IsBundledPlugin() {
 			return plugins.ErrInstallCorePlugin
 		}
@@ -78,7 +84,7 @@ func (m *PluginInstaller) Add(ctx context.Context, pluginID, version string, opt
 		}
 
 		// remove existing installation of plugin
-		err = m.Remove(ctx, plugin.ID)
+		err = m.Remove(ctx, plugin.ID, plugin.Info.Version)
 		if err != nil {
 			return err
 		}
@@ -102,7 +108,7 @@ func (m *PluginInstaller) Add(ctx context.Context, pluginID, version string, opt
 		}
 	}
 
-	extractedArchive, err := m.pluginStorage.Extract(ctx, pluginID, pluginArchive.File)
+	extractedArchive, err := m.pluginStorage.Extract(ctx, pluginID, m.pluginStorageDirFunc, pluginArchive.File)
 	if err != nil {
 		return err
 	}
@@ -110,13 +116,13 @@ func (m *PluginInstaller) Add(ctx context.Context, pluginID, version string, opt
 	// download dependency plugins
 	pathsToScan := []string{extractedArchive.Path}
 	for _, dep := range extractedArchive.Dependencies {
-		m.log.Info("Fetching %s dependencies...", dep.ID)
+		m.log.Info(fmt.Sprintf("Fetching %s dependencies...", dep.ID))
 		d, err := m.pluginRepo.GetPluginArchive(ctx, dep.ID, dep.Version, compatOpts)
 		if err != nil {
 			return fmt.Errorf("%v: %w", fmt.Sprintf("failed to download plugin %s from repository", dep.ID), err)
 		}
 
-		depArchive, err := m.pluginStorage.Extract(ctx, dep.ID, d.File)
+		depArchive, err := m.pluginStorage.Extract(ctx, dep.ID, m.pluginStorageDirFunc, d.File)
 		if err != nil {
 			return err
 		}
@@ -126,15 +132,15 @@ func (m *PluginInstaller) Add(ctx context.Context, pluginID, version string, opt
 
 	_, err = m.pluginLoader.Load(ctx, sources.NewLocalSource(plugins.ClassExternal, pathsToScan))
 	if err != nil {
-		m.log.Error("Could not load plugins", "paths", pathsToScan, "err", err)
+		m.log.Error("Could not load plugins", "paths", pathsToScan, "error", err)
 		return err
 	}
 
 	return nil
 }
 
-func (m *PluginInstaller) Remove(ctx context.Context, pluginID string) error {
-	plugin, exists := m.plugin(ctx, pluginID)
+func (m *PluginInstaller) Remove(ctx context.Context, pluginID, version string) error {
+	plugin, exists := m.plugin(ctx, pluginID, version)
 	if !exists {
 		return plugins.ErrPluginNotInstalled
 	}
@@ -143,15 +149,27 @@ func (m *PluginInstaller) Remove(ctx context.Context, pluginID string) error {
 		return plugins.ErrUninstallCorePlugin
 	}
 
-	if err := m.pluginLoader.Unload(ctx, plugin.ID); err != nil {
+	p, err := m.pluginLoader.Unload(ctx, plugin)
+	if err != nil {
 		return err
 	}
-	return nil
+
+	if remover, ok := p.FS.(plugins.FSRemover); ok {
+		if err = remover.Remove(); err != nil {
+			return err
+		}
+	}
+
+	has, err := m.serviceRegistry.HasExternalService(ctx, pluginID)
+	if err == nil && has {
+		return m.serviceRegistry.RemoveExternalService(ctx, pluginID)
+	}
+	return err
 }
 
 // plugin finds a plugin with `pluginID` from the store
-func (m *PluginInstaller) plugin(ctx context.Context, pluginID string) (*plugins.Plugin, bool) {
-	p, exists := m.pluginRegistry.Plugin(ctx, pluginID)
+func (m *PluginInstaller) plugin(ctx context.Context, pluginID, pluginVersion string) (*plugins.Plugin, bool) {
+	p, exists := m.pluginRegistry.Plugin(ctx, pluginID, pluginVersion)
 	if !exists {
 		return nil, false
 	}
@@ -159,7 +177,7 @@ func (m *PluginInstaller) plugin(ctx context.Context, pluginID string) (*plugins
 	return p, true
 }
 
-func repoCompatOpts(opts plugins.CompatOpts) (repo.CompatOpts, error) {
+func RepoCompatOpts(opts plugins.CompatOpts) (repo.CompatOpts, error) {
 	os := opts.OS()
 	arch := opts.Arch()
 	if len(os) == 0 || len(arch) == 0 {

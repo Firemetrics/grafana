@@ -3,9 +3,8 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import selectEvent from 'react-select-event';
 
+import { AdHocVariableFilter } from '@grafana/data';
 import { DataSourceSrv, setDataSourceSrv } from '@grafana/runtime';
-
-import { AdHocVariableFilter } from '../../types';
 
 import { AdHocFilter } from './AdHocFilter';
 
@@ -84,13 +83,11 @@ function setup() {
       key: 'key1',
       operator: '=',
       value: 'val1',
-      condition: '',
     },
     {
       key: 'key2',
       operator: '=',
       value: 'val2',
-      condition: '',
     },
   ];
   const addFilter = jest.fn();

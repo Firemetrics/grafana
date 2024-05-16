@@ -24,6 +24,11 @@ const setup = (children: ReactNode, queries: DataQuery[] = [{ refId: 'A' }]) => 
     explore: {
       panes: {
         left: {
+          range: {
+            from: 'now-6h',
+            to: 'now',
+            raw: { from: 'now-6h', to: 'now' },
+          },
           queries,
           queryResponse: createEmptyQueryResponse(),
         },
@@ -51,6 +56,18 @@ describe('AddToDashboardButton', () => {
     setEchoSrv(new Echo());
   });
 
+  /* The Add to dashboard form brings in the DashboardPicker, which will call backendSrv.search as part of its instantiation 
+  If we do not need a list of dashboards for the test, return an empty array. */
+  beforeEach(() => {
+    // Mock the search response so we don't get any refused connection errors
+    // from this test (as the fetch polyfill means this logic would actually try and call the API)
+    jest.spyOn(backendSrv, 'search').mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('Is disabled if explore pane has no queries', async () => {
     setup(<AddToDashboard exploreId={'left'} />, []);
 
@@ -73,7 +90,7 @@ describe('AddToDashboardButton', () => {
 
     beforeEach(() => {
       jest.spyOn(api, 'setDashboardInLocalStorage').mockReturnValue(addToDashboardResponse);
-      mocks.contextSrv.hasAccess.mockImplementation(() => true);
+      mocks.contextSrv.hasPermission.mockImplementation(() => true);
     });
 
     afterEach(() => {
@@ -283,7 +300,7 @@ describe('AddToDashboardButton', () => {
     });
 
     it('Should only show existing dashboard option with no access to create', async () => {
-      mocks.contextSrv.hasAccess.mockImplementation((action) => {
+      mocks.contextSrv.hasPermission.mockImplementation((action) => {
         if (action === 'dashboards:create') {
           return false;
         } else {
@@ -296,7 +313,7 @@ describe('AddToDashboardButton', () => {
     });
 
     it('Should only show new dashboard option with no access to write', async () => {
-      mocks.contextSrv.hasAccess.mockImplementation((action) => {
+      mocks.contextSrv.hasPermission.mockImplementation((action) => {
         if (action === 'dashboards:write') {
           return false;
         } else {
@@ -311,7 +328,7 @@ describe('AddToDashboardButton', () => {
 
   describe('Error handling', () => {
     beforeEach(() => {
-      mocks.contextSrv.hasAccess.mockImplementation(() => true);
+      mocks.contextSrv.hasPermission.mockImplementation(() => true);
     });
 
     afterEach(() => {

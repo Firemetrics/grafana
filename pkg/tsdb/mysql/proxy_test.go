@@ -3,21 +3,34 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/grafana/grafana/pkg/infra/proxy/proxyutil"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/proxy"
 )
 
-func TestMySQLProxyDialer(t *testing.T) {
-	settings := proxyutil.SetupTestSecureSocksProxySettings(t)
+type testDialer struct {
+}
 
+func (d *testDialer) Dial(network, addr string) (c net.Conn, err error) {
+	return nil, fmt.Errorf("test-dialer: Dial is not functional")
+}
+
+func (d *testDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return nil, fmt.Errorf("test-dialer: DialContext is not functional")
+}
+
+var _ proxy.Dialer = (&testDialer{})
+var _ proxy.ContextDialer = (&testDialer{})
+
+func TestMySQLProxyDialer(t *testing.T) {
 	protocol := "tcp"
-	network, err := registerProxyDialerContext(settings, protocol, "1")
+	dbURL := "localhost:5432"
+	network, err := registerProxyDialerContext(protocol, dbURL, &testDialer{})
 	require.NoError(t, err)
 	driver := mysql.MySQLDriver{}
-	dbURL := "localhost:5432"
 	cnnstr := fmt.Sprintf("test:test@%s(%s)/db",
 		network,
 		dbURL,
@@ -28,7 +41,7 @@ func TestMySQLProxyDialer(t *testing.T) {
 	})
 
 	t.Run("Multiple networks can be created", func(t *testing.T) {
-		network, err := registerProxyDialerContext(settings, protocol, "2")
+		network, err := registerProxyDialerContext(protocol, dbURL, &testDialer{})
 		require.NoError(t, err)
 		cnnstr2 := fmt.Sprintf("test:test@%s(%s)/db",
 			network,
@@ -46,6 +59,6 @@ func TestMySQLProxyDialer(t *testing.T) {
 		require.NoError(t, err)
 		_, err = conn.Connect(context.Background())
 		require.Error(t, err)
-		require.Contains(t, err.Error(), fmt.Sprintf("socks connect %s %s->%s", protocol, settings.ProxyAddress, dbURL))
+		require.Contains(t, err.Error(), "test-dialer: DialContext is not functional")
 	})
 }

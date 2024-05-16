@@ -13,47 +13,40 @@ import { InlineFieldRow } from '../Forms/InlineFieldRow';
 import { RadioButtonGroup } from '../Forms/RadioButtonGroup/RadioButtonGroup';
 import { Icon } from '../Icon/Icon';
 import { Input } from '../Input/Input';
-import { HorizontalGroup, VerticalGroup } from '../Layout/Layout';
+import { BackgroundColor, BorderColor, Box } from '../Layout/Box/Box';
+import { Stack } from '../Layout/Stack/Stack';
 import { Select } from '../Select/Select';
 import { Switch } from '../Switch/Switch';
+import { Text, TextProps } from '../Text/Text';
 
 interface DemoBoxProps {
-  bg?: string;
-  border?: string;
-  textColor?: string;
+  bg?: BackgroundColor;
+  border?: BorderColor;
+  textColor?: TextProps['color'];
 }
 
 const DemoBox = ({ bg, border, children }: React.PropsWithChildren<DemoBoxProps>) => {
-  const style = cx(
-    css`
-      padding: 16px;
-      background: ${bg ?? 'inherit'};
-      width: 100%;
-    `,
-    border
-      ? css`
-          border: 1px solid ${border};
-        `
-      : null
+  return (
+    <Box backgroundColor={bg ? bg : undefined} padding={2} borderStyle={border ? 'solid' : undefined}>
+      {children}
+    </Box>
   );
-
-  return <div className={style}>{children}</div>;
 };
 
 const DemoText = ({
   color,
   bold,
-  size,
   children,
-}: React.PropsWithChildren<{ color?: string; bold?: boolean; size?: number }>) => {
-  const style = css`
-    padding: 4px;
-    color: ${color ?? 'inherit'};
-    font-weight: ${bold ? 500 : 400};
-    font-size: ${size ?? 14}px;
-  `;
-
-  return <div className={style}>{children}</div>;
+}: React.PropsWithChildren<{ color?: TextProps['color']; bold?: boolean; size?: number }>) => {
+  return (
+    <Box padding={0.5}>
+      {children && (
+        <Text color={color ? color : undefined} weight={bold ? 'bold' : undefined}>
+          {children}
+        </Text>
+      )}
+    </Box>
+  );
 };
 
 export const ThemeDemo = () => {
@@ -85,36 +78,36 @@ export const ThemeDemo = () => {
 
   return (
     <div
-      className={css`
-        width: 100%;
-        color: ${t.colors.text.primary};
-      `}
+      className={css({
+        width: '100%',
+        color: t.colors.text.primary,
+      })}
     >
-      <DemoBox bg={t.colors.background.canvas}>
+      <DemoBox bg="canvas">
         <CollapsableSection label="Layers" isOpen={true}>
           <DemoText>t.colors.background.canvas</DemoText>
-          <DemoBox bg={t.colors.background.primary} border={t.colors.border.weak}>
+          <DemoBox bg="primary" border="weak">
             <DemoText>t.colors.background.primary is the main & preferred content </DemoText>
-            <DemoBox bg={t.colors.background.secondary} border={t.colors.border.weak}>
+            <DemoBox bg="secondary" border="weak">
               <DemoText>t.colors.background.secondary and t.colors.border.layer1</DemoText>
             </DemoBox>
           </DemoBox>
         </CollapsableSection>
         <CollapsableSection label="Text colors" isOpen={true}>
-          <HorizontalGroup>
+          <Stack justifyContent="flex-start">
             <DemoBox>
               <TextColors t={t} />
             </DemoBox>
-            <DemoBox bg={t.colors.background.primary}>
+            <DemoBox bg="primary">
               <TextColors t={t} />
             </DemoBox>
-            <DemoBox bg={t.colors.background.secondary}>
+            <DemoBox bg="secondary">
               <TextColors t={t} />
             </DemoBox>
-          </HorizontalGroup>
+          </Stack>
         </CollapsableSection>
         <CollapsableSection label="Rich colors" isOpen={true}>
-          <DemoBox bg={t.colors.background.primary}>
+          <DemoBox bg="primary">
             <table className={colorsTableStyle}>
               <thead>
                 <tr>
@@ -134,7 +127,7 @@ export const ThemeDemo = () => {
           </DemoBox>
         </CollapsableSection>
         <CollapsableSection label="Forms" isOpen={true}>
-          <DemoBox bg={t.colors.background.primary}>
+          <DemoBox bg="primary">
             <Field label="Input label" description="Field description">
               <Input placeholder="Placeholder" />
             </Field>
@@ -147,7 +140,7 @@ export const ThemeDemo = () => {
             <Field label="Radio label">
               <RadioButtonGroup options={radioOptions} value={radioValue} onChange={setRadioValue} />
             </Field>
-            <HorizontalGroup>
+            <Stack>
               <Field label="Switch">
                 <Switch value={boolValue} onChange={(e) => setBoolValue(e.currentTarget.checked)} />
               </Field>
@@ -157,8 +150,8 @@ export const ThemeDemo = () => {
               <Field label="Switch false disabled" disabled={true}>
                 <Switch value={false} />
               </Field>
-            </HorizontalGroup>
-            <VerticalGroup>
+            </Stack>
+            <Stack direction="column">
               <div>Inline forms</div>
               <InlineFieldRow>
                 <InlineField label="Label">
@@ -168,22 +161,22 @@ export const ThemeDemo = () => {
                   <Input placeholder="Disabled" />
                 </InlineField>
               </InlineFieldRow>
-            </VerticalGroup>
+            </Stack>
           </DemoBox>
         </CollapsableSection>
         <CollapsableSection label="Shadows" isOpen={true}>
-          <DemoBox bg={t.colors.background.primary}>
-            <HorizontalGroup>
-              {Object.keys(t.shadows).map((key) => (
-                <ShadowDemo name={key} shadow={(t.shadows as any)[key]} key={key} />
+          <DemoBox bg="primary">
+            <Stack>
+              {Object.entries(t.shadows).map(([key, value]) => (
+                <ShadowDemo name={key} shadow={value} key={key} />
               ))}
-            </HorizontalGroup>
+            </Stack>
           </DemoBox>
         </CollapsableSection>
         <CollapsableSection label="Buttons" isOpen={true}>
-          <DemoBox bg={t.colors.background.primary}>
-            <VerticalGroup spacing="lg">
-              <HorizontalGroup>
+          <DemoBox bg="primary">
+            <Stack direction="column" gap={3}>
+              <Stack>
                 {allButtonVariants.map((variant) => (
                   <Button variant={variant} key={variant}>
                     {variant}
@@ -192,7 +185,7 @@ export const ThemeDemo = () => {
                 <Button variant="primary" disabled>
                   Disabled
                 </Button>
-              </HorizontalGroup>
+              </Stack>
               <Card>
                 <Card.Heading>Button inside card</Card.Heading>
                 <Card.Actions>
@@ -206,7 +199,7 @@ export const ThemeDemo = () => {
                   </Button>
                 </Card.Actions>
               </Card>
-            </VerticalGroup>
+            </Stack>
           </DemoBox>
         </CollapsableSection>
         <CollapsableSection label="Actions" isOpen={true}>
@@ -228,48 +221,48 @@ export function RichColorDemo({ theme, color }: RichColorDemoProps) {
       <td>{color.name}</td>
       <td>
         <div
-          className={css`
-            background: ${color.main};
-            border-radius: ${theme.shape.borderRadius()};
-            color: ${color.contrastText};
-            padding: 8px;
-            font-weight: 500;
-          `}
+          className={css({
+            background: color.main,
+            borderRadius: theme.shape.radius.default,
+            color: color.contrastText,
+            padding: '8px',
+            fontWeight: 500,
+          })}
         >
           {color.main}
         </div>
       </td>
       <td>
         <div
-          className={css`
-            background: ${color.shade};
-            color: ${color.contrastText};
-            border-radius: 4px;
-            padding: 8px;
-          `}
+          className={css({
+            background: color.shade,
+            color: color.contrastText,
+            borderRadius: theme.shape.radius.default,
+            padding: '8px',
+          })}
         >
           {color.shade}
         </div>
       </td>
       <td>
         <div
-          className={css`
-            background: ${color.transparent};
-            border-radius: 4px;
-            padding: 8px;
-          `}
+          className={css({
+            background: color.transparent,
+            borderRadius: theme.shape.radius.default,
+            padding: '8px',
+          })}
         >
           {color.shade}
         </div>
       </td>
       <td>
         <div
-          className={css`
-            border: 1px solid ${color.border};
-            color: ${color.text};
-            border-radius: 4px;
-            padding: 8px;
-          `}
+          className={css({
+            border: `1px solid ${color.border}`,
+            color: color.text,
+            borderRadius: theme.shape.radius.default,
+            padding: '8px',
+          })}
         >
           {color.text}
         </div>
@@ -278,28 +271,28 @@ export function RichColorDemo({ theme, color }: RichColorDemoProps) {
   );
 }
 
-const colorsTableStyle = css`
-  text-align: center;
+const colorsTableStyle = css({
+  textAlign: 'center',
 
-  td {
-    padding: 8px;
-    text-align: center;
-  }
-`;
+  td: {
+    padding: '8px',
+    textAlign: 'center',
+  },
+});
 
 export function TextColors({ t }: { t: GrafanaTheme2 }) {
   return (
     <>
-      <DemoText color={t.colors.text.primary}>
+      <DemoText color="primary">
         text.primary <Icon name="trash-alt" />
       </DemoText>
-      <DemoText color={t.colors.text.secondary}>
+      <DemoText color="secondary">
         text.secondary <Icon name="trash-alt" />
       </DemoText>
-      <DemoText color={t.colors.text.disabled}>
+      <DemoText color="disabled">
         text.disabled <Icon name="trash-alt" />
       </DemoText>
-      <DemoText color={t.colors.primary.text}>
+      <DemoText color="primary">
         primary.text <Icon name="trash-alt" />
       </DemoText>
     </>
@@ -334,34 +327,34 @@ export function ActionsDemo() {
   });
 
   return (
-    <HorizontalGroup>
-      <DemoBox bg={t.colors.background.canvas}>
-        <VerticalGroup>
+    <Stack justifyContent="flex-start">
+      <DemoBox bg="canvas">
+        <Stack direction="column">
           <div className={item}>item</div>
           <div className={item}>item</div>
           <div className={cx(item, hover)}>item hover</div>
           <div className={cx(item, selected)}>item selected</div>
           <div className={cx(item, focused)}>item focused</div>
-        </VerticalGroup>
+        </Stack>
       </DemoBox>
-      <DemoBox bg={t.colors.background.primary}>
-        <VerticalGroup>
+      <DemoBox bg="primary">
+        <Stack direction="column">
           <div className={item}>item</div>
           <div className={item}>item</div>
           <div className={cx(item, hover)}>item hover</div>
           <div className={cx(item, selected)}>item selected</div>
           <div className={cx(item, focused)}>item focused</div>
-        </VerticalGroup>
+        </Stack>
       </DemoBox>
-      <DemoBox bg={t.colors.background.secondary}>
-        <VerticalGroup>
+      <DemoBox bg="secondary">
+        <Stack direction="column">
           <div className={item}>item</div>
           <div className={item}>item</div>
           <div className={cx(item, hover)}>item hover</div>
           <div className={cx(item, selected)}>item selected</div>
           <div className={cx(item, focused)}>item focused</div>
-        </VerticalGroup>
+        </Stack>
       </DemoBox>
-    </HorizontalGroup>
+    </Stack>
   );
 }

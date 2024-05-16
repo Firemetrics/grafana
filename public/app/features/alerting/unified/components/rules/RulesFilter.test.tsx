@@ -4,20 +4,17 @@ import React from 'react';
 import { TestProvider } from 'test/helpers/TestProvider';
 import { byLabelText, byRole } from 'testing-library-selector';
 
-import { locationService, logInfo, setDataSourceSrv } from '@grafana/runtime';
+import { locationService, setDataSourceSrv } from '@grafana/runtime';
+import { mockSearchApi, setupMswServer } from 'app/features/alerting/unified/mockApi';
 
-import { LogMessages } from '../../Analytics';
+import * as analytics from '../../Analytics';
 import { MockDataSourceSrv } from '../../mocks';
+import { setupPluginsExtensionsHook } from '../../testSetup/plugins';
 
 import RulesFilter from './RulesFilter';
 
-jest.mock('@grafana/runtime', () => {
-  const original = jest.requireActual('@grafana/runtime');
-  return {
-    ...original,
-    logInfo: jest.fn(),
-  };
-});
+const server = setupMswServer();
+jest.spyOn(analytics, 'logInfo');
 
 jest.mock('./MultipleDataSourcePicker', () => {
   const original = jest.requireActual('./MultipleDataSourcePicker');
@@ -28,6 +25,8 @@ jest.mock('./MultipleDataSourcePicker', () => {
 });
 
 setDataSourceSrv(new MockDataSourceSrv({}));
+
+setupPluginsExtensionsHook();
 
 const ui = {
   stateFilter: {
@@ -45,6 +44,7 @@ const ui = {
 
 beforeEach(() => {
   locationService.replace({ search: '' });
+  mockSearchApi(server).search([]);
 });
 
 describe('RulesFilter', () => {
@@ -91,6 +91,6 @@ describe('Analytics', () => {
 
     await userEvent.click(button);
 
-    expect(logInfo).toHaveBeenCalledWith(LogMessages.clickingAlertStateFilters);
+    expect(analytics.logInfo).toHaveBeenCalledWith(analytics.LogMessages.clickingAlertStateFilters);
   });
 });

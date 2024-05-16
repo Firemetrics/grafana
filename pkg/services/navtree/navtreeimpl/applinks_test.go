@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/navtree"
 	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginaccesscontrol"
 	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginsettings"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginstore"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/web"
@@ -33,7 +34,7 @@ func TestAddAppLinks(t *testing.T) {
 		{Action: datasources.ActionRead, Scope: "*"},
 	}
 
-	testApp1 := plugins.PluginDTO{
+	testApp1 := pluginstore.Plugin{
 		JSONData: plugins.JSONData{
 			ID:   "test-app1",
 			Name: "Test app1 name",
@@ -56,7 +57,7 @@ func TestAddAppLinks(t *testing.T) {
 		},
 	}
 
-	testApp2 := plugins.PluginDTO{
+	testApp2 := pluginstore.Plugin{
 		JSONData: plugins.JSONData{
 			ID:   "test-app2",
 			Name: "Test app2 name",
@@ -73,7 +74,7 @@ func TestAddAppLinks(t *testing.T) {
 		},
 	}
 
-	testApp3 := plugins.PluginDTO{
+	testApp3 := pluginstore.Plugin{
 		JSONData: plugins.JSONData{
 			ID:   "test-app3",
 			Name: "Test app3 name",
@@ -114,8 +115,8 @@ func TestAddAppLinks(t *testing.T) {
 		accessControl:  accesscontrolmock.New().WithPermissions(permissions),
 		pluginSettings: &pluginSettings,
 		features:       featuremgmt.WithFeatures(),
-		pluginStore: plugins.FakePluginStore{
-			PluginList: []plugins.PluginDTO{testApp1, testApp2, testApp3},
+		pluginStore: &pluginstore.FakePluginStore{
+			PluginList: []pluginstore.Plugin{testApp1, testApp2, testApp3},
 		},
 	}
 
@@ -293,7 +294,6 @@ func TestAddAppLinks(t *testing.T) {
 	})
 
 	t.Run("Should replace page from plugin", func(t *testing.T) {
-		service.features = featuremgmt.WithFeatures(featuremgmt.FlagDataConnectionsConsole)
 		service.navigationAppConfig = map[string]NavigationAppConfig{}
 		service.navigationAppPathConfig = map[string]NavigationAppConfig{
 			"/connections/add-new-connection": {SectionID: "connections"},
@@ -333,7 +333,6 @@ func TestAddAppLinks(t *testing.T) {
 	})
 
 	t.Run("Should not register pages under the app plugin section unless AddToNav=true", func(t *testing.T) {
-		service.features = featuremgmt.WithFeatures(featuremgmt.FlagDataConnectionsConsole)
 		service.navigationAppPathConfig = map[string]NavigationAppConfig{} // We don't configure it as a standalone plugin page
 
 		treeRoot := navtree.NavTreeRoot{}
@@ -361,18 +360,20 @@ func TestAddAppLinks(t *testing.T) {
 func TestReadingNavigationSettings(t *testing.T) {
 	t.Run("Should include defaults", func(t *testing.T) {
 		service := ServiceImpl{
-			cfg: setting.NewCfg(),
+			cfg:      setting.NewCfg(),
+			features: featuremgmt.WithFeatures(),
 		}
 
 		_, _ = service.cfg.Raw.NewSection("navigation.app_sections")
 		service.readNavigationSettings()
 
-		require.Equal(t, "monitoring", service.navigationAppConfig["grafana-k8s-app"].SectionID)
+		require.Equal(t, "infrastructure", service.navigationAppConfig["grafana-k8s-app"].SectionID)
 	})
 
 	t.Run("Can add additional overrides via ini system", func(t *testing.T) {
 		service := ServiceImpl{
-			cfg: setting.NewCfg(),
+			cfg:      setting.NewCfg(),
+			features: featuremgmt.WithFeatures(),
 		}
 
 		appSections, _ := service.cfg.Raw.NewSection("navigation.app_sections")
@@ -400,7 +401,7 @@ func TestAddAppLinksAccessControl(t *testing.T) {
 	reqCtx := &contextmodel.ReqContext{SignedInUser: user, Context: &web.Context{Req: httpReq}}
 	catalogReadAction := "test-app1.catalog:read"
 
-	testApp1 := plugins.PluginDTO{
+	testApp1 := pluginstore.Plugin{
 		JSONData: plugins.JSONData{
 			ID: "test-app1", Name: "Test app1 name", Type: plugins.TypeApp,
 			Includes: []*plugins.Includes{
@@ -433,11 +434,11 @@ func TestAddAppLinksAccessControl(t *testing.T) {
 	service := ServiceImpl{
 		log:            log.New("navtree"),
 		cfg:            cfg,
-		accessControl:  acimpl.ProvideAccessControl(cfg),
+		accessControl:  acimpl.ProvideAccessControl(featuremgmt.WithFeatures()),
 		pluginSettings: &pluginSettings,
 		features:       featuremgmt.WithFeatures(),
-		pluginStore: plugins.FakePluginStore{
-			PluginList: []plugins.PluginDTO{testApp1},
+		pluginStore: &pluginstore.FakePluginStore{
+			PluginList: []pluginstore.Plugin{testApp1},
 		},
 	}
 

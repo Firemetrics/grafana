@@ -2,12 +2,15 @@ package resourcepermissions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/grafana/grafana/pkg/api/routing"
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
+	"github.com/grafana/grafana/pkg/services/auth/identity"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/licensing"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/team"
@@ -46,12 +49,15 @@ type Store interface {
 
 	// GetResourcePermissions will return all permission for supplied resource id
 	GetResourcePermissions(ctx context.Context, orgID int64, query GetResourcePermissionsQuery) ([]accesscontrol.ResourcePermission, error)
+
+	// DeleteResourcePermissions will delete all permissions for supplied resource id
+	DeleteResourcePermissions(ctx context.Context, orgID int64, cmd *DeleteResourcePermissionsCmd) error
 }
 
-func New(
-	options Options, cfg *setting.Cfg, router routing.RouteRegister, license licensing.Licensing,
+func New(cfg *setting.Cfg,
+	options Options, features featuremgmt.FeatureToggles, router routing.RouteRegister, license licensing.Licensing,
 	ac accesscontrol.AccessControl, service accesscontrol.Service, sqlStore db.DB,
-	teamService team.Service, userService user.Service,
+	teamService team.Service, userService user.Service, actionSetService ActionSetService,
 ) (*Service, error) {
 	permissions := make([]string, 0, len(options.PermissionsToActions))
 	actionSet := make(map[string]struct{})
@@ -59,6 +65,9 @@ func New(
 		permissions = append(permissions, permission)
 		for _, a := range actions {
 			actionSet[a] = struct{}{}
+		}
+		if features.IsEnabled(context.Background(), featuremgmt.FlagAccessActionSets) {
+			actionSetService.StoreActionSet(options.Resource, permission, actions)
 		}
 	}
 
@@ -74,8 +83,7 @@ func New(
 
 	s := &Service{
 		ac:          ac,
-		cfg:         cfg,
-		store:       NewStore(sqlStore),
+		store:       NewStore(sqlStore, features),
 		options:     options,
 		license:     license,
 		permissions: permissions,
@@ -86,7 +94,7 @@ func New(
 		userService: userService,
 	}
 
-	s.api = newApi(ac, router, s)
+	s.api = newApi(cfg, ac, router, s)
 
 	if err := s.declareFixedRoles(); err != nil {
 		return nil, err
@@ -99,7 +107,6 @@ func New(
 
 // Service is used to create access control sub system including api / and service for managed resource permission
 type Service struct {
-	cfg     *setting.Cfg
 	ac      accesscontrol.AccessControl
 	service accesscontrol.Service
 	store   Store
@@ -114,17 +121,17 @@ type Service struct {
 	userService user.Service
 }
 
-func (s *Service) GetPermissions(ctx context.Context, user *user.SignedInUser, resourceID string) ([]accesscontrol.ResourcePermission, error) {
+func (s *Service) GetPermissions(ctx context.Context, user identity.Requester, resourceID string) ([]accesscontrol.ResourcePermission, error) {
 	var inheritedScopes []string
 	if s.options.InheritedScopesSolver != nil {
 		var err error
-		inheritedScopes, err = s.options.InheritedScopesSolver(ctx, user.OrgID, resourceID)
+		inheritedScopes, err = s.options.InheritedScopesSolver(ctx, user.GetOrgID(), resourceID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return s.store.GetResourcePermissions(ctx, user.OrgID, GetResourcePermissionsQuery{
+	return s.store.GetResourcePermissions(ctx, user.GetOrgID(), GetResourcePermissionsQuery{
 		User:                 user,
 		Actions:              s.actions,
 		Resource:             s.options.Resource,
@@ -264,6 +271,14 @@ func (s *Service) MapActions(permission accesscontrol.ResourcePermission) string
 	return ""
 }
 
+func (s *Service) DeleteResourcePermissions(ctx context.Context, orgID int64, resourceID string) error {
+	return s.store.DeleteResourcePermissions(ctx, orgID, &DeleteResourcePermissionsCmd{
+		Resource:          s.options.Resource,
+		ResourceAttribute: s.options.ResourceAttribute,
+		ResourceID:        resourceID,
+	})
+}
+
 func (s *Service) mapPermission(permission string) ([]string, error) {
 	if permission == "" {
 		return []string{}, nil
@@ -274,7 +289,7 @@ func (s *Service) mapPermission(permission string) ([]string, error) {
 			return v, nil
 		}
 	}
-	return nil, ErrInvalidPermission
+	return nil, ErrInvalidPermission.Build(ErrInvalidPermissionData(permission))
 }
 
 func (s *Service) validateResource(ctx context.Context, orgID int64, resourceID string) error {
@@ -286,27 +301,37 @@ func (s *Service) validateResource(ctx context.Context, orgID int64, resourceID 
 
 func (s *Service) validateUser(ctx context.Context, orgID, userID int64) error {
 	if !s.options.Assignments.Users {
-		return ErrInvalidAssignment
+		return ErrInvalidAssignment.Build(ErrInvalidAssignmentData("users"))
 	}
 
 	_, err := s.userService.GetSignedInUser(ctx, &user.GetSignedInUserQuery{OrgID: orgID, UserID: userID})
-	return err
+	switch {
+	case errors.Is(err, user.ErrUserNotFound):
+		return accesscontrol.ErrAssignmentEntityNotFound.Build(accesscontrol.ErrAssignmentEntityNotFoundData("user"))
+	default:
+		return err
+	}
 }
 
 func (s *Service) validateTeam(ctx context.Context, orgID, teamID int64) error {
 	if !s.options.Assignments.Teams {
-		return ErrInvalidAssignment
+		return ErrInvalidAssignment.Build(ErrInvalidAssignmentData("teams"))
 	}
 
 	if _, err := s.teamService.GetTeamByID(ctx, &team.GetTeamByIDQuery{OrgID: orgID, ID: teamID}); err != nil {
-		return err
+		switch {
+		case errors.Is(err, team.ErrTeamNotFound):
+			return accesscontrol.ErrAssignmentEntityNotFound.Build(accesscontrol.ErrAssignmentEntityNotFoundData("team"))
+		default:
+			return err
+		}
 	}
 	return nil
 }
 
-func (s *Service) validateBuiltinRole(ctx context.Context, builtinRole string) error {
+func (s *Service) validateBuiltinRole(_ context.Context, builtinRole string) error {
 	if !s.options.Assignments.BuiltInRoles {
-		return ErrInvalidAssignment
+		return ErrInvalidAssignment.Build(ErrInvalidAssignmentData("builtInRoles"))
 	}
 
 	if err := accesscontrol.ValidateBuiltInRoles([]string{builtinRole}); err != nil {

@@ -4,12 +4,11 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { Store } from 'redux';
 
-import { LoadingState } from '@grafana/data';
+import { LoadingState, QueryVariableModel, VariableWithMultiSupport, VariableWithOptions } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
 import { queryBuilder } from '../../shared/testing/builders';
 import { getPreloadedState } from '../../state/helpers';
-import { QueryVariableModel, VariableWithMultiSupport, VariableWithOptions } from '../../types';
 import { VariablePickerProps } from '../types';
 
 import { optionPickerFactory } from './OptionsPicker';
@@ -111,7 +110,7 @@ describe('OptionPicker', () => {
         variable: { ...defaultVariable, state: LoadingState.Loading },
       });
       expect(getSubMenu('A + C')).toBeInTheDocument();
-      expect(screen.getByLabelText(selectors.components.LoadingIndicator.icon)).toBeInTheDocument();
+      expect(screen.getByTestId(selectors.components.LoadingIndicator.icon)).toBeInTheDocument();
     });
 
     it('link text should not be clickable', async () => {

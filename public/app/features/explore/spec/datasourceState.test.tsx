@@ -1,8 +1,39 @@
 import { screen, waitFor } from '@testing-library/react';
+import { Props } from 'react-virtualized-auto-sizer';
+
+import { EventBusSrv } from '@grafana/data';
 
 import { changeDatasource } from './helper/interactions';
 import { makeLogsQueryResponse } from './helper/query';
 import { setupExplore, tearDown, waitForExplore } from './helper/setup';
+
+const testEventBus = new EventBusSrv();
+
+jest.mock('@grafana/runtime', () => ({
+  ...jest.requireActual('@grafana/runtime'),
+  getAppEvents: () => testEventBus,
+}));
+
+jest.mock('react-virtualized-auto-sizer', () => {
+  return ({ children }: Props) =>
+    children({
+      height: 1,
+      scaledHeight: 1,
+      scaledWidth: 1,
+      width: 1,
+    });
+});
+
+jest.mock('app/core/core', () => ({
+  contextSrv: {
+    hasPermission: () => true,
+    getValidIntervals: (defaultIntervals: string[]) => defaultIntervals,
+  },
+}));
+
+jest.mock('../hooks/useExplorePageTitle', () => ({
+  useExplorePageTitle: jest.fn(),
+}));
 
 describe('Explore: handle datasource states', () => {
   afterEach(() => {

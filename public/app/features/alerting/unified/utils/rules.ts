@@ -1,6 +1,7 @@
 import { capitalize } from 'lodash';
 
 import { AlertState } from '@grafana/data';
+import { config } from '@grafana/runtime';
 import {
   Alert,
   AlertingRule,
@@ -34,8 +35,9 @@ import { RuleHealth } from '../search/rulesSearchParser';
 
 import { RULER_NOT_SUPPORTED_MSG } from './constants';
 import { getRulesSourceName } from './datasource';
+import { GRAFANA_ORIGIN_LABEL } from './labels';
 import { AsyncRequestState } from './redux';
-import { safeParseDurationstr } from './time';
+import { safeParsePrometheusDuration } from './time';
 
 export function isAlertingRule(rule: Rule | undefined): rule is AlertingRule {
   return typeof rule === 'object' && rule.type === PromRuleType.Alerting;
@@ -57,8 +59,8 @@ export function isGrafanaRulerRule(rule?: RulerRuleDTO): rule is RulerGrafanaRul
   return typeof rule === 'object' && 'grafana_alert' in rule;
 }
 
-export function isGrafanaRulerRulePaused(rule: CombinedRule) {
-  return rule.rulerRule && isGrafanaRulerRule(rule.rulerRule) && Boolean(rule.rulerRule.grafana_alert.is_paused);
+export function isGrafanaRulerRulePaused(rule: RulerGrafanaRuleDTO) {
+  return rule && isGrafanaRulerRule(rule) && Boolean(rule.grafana_alert.is_paused);
 }
 
 export function alertInstanceKey(alert: Alert): string {
@@ -99,6 +101,41 @@ export function getRuleHealth(health: string): RuleHealth | undefined {
     default:
       return undefined;
   }
+}
+
+export interface RulePluginOrigin {
+  pluginId: string;
+}
+
+export function getRulePluginOrigin(rule: CombinedRule): RulePluginOrigin | undefined {
+  // com.grafana.origin=plugin/<plugin-identifier>
+  // Prom and Mimir do not support dots in label names 😔
+  const origin = rule.labels[GRAFANA_ORIGIN_LABEL];
+  if (!origin) {
+    return undefined;
+  }
+
+  const match = origin.match(/^plugin\/(?<pluginId>.+)$/);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const pluginId = match.groups['pluginId'];
+  const pluginInstalled = isPluginInstalled(pluginId);
+
+  if (!pluginInstalled) {
+    return undefined;
+  }
+
+  return { pluginId };
+}
+
+function isPluginInstalled(pluginId: string) {
+  return Boolean(config.apps[pluginId]);
+}
+
+export function isPluginProvidedRule(rule: CombinedRule): boolean {
+  return Boolean(getRulePluginOrigin(rule));
 }
 
 export function alertStateToReadable(state: PromAlertingRuleState | GrafanaAlertStateWithReason | AlertState): string {
@@ -161,7 +198,8 @@ const alertStateToStateMap: Record<PromAlertingRuleState | GrafanaAlertState | A
   [AlertState.Paused]: 'warning',
   [AlertState.Alerting]: 'bad',
   [AlertState.OK]: 'good',
-  [AlertState.Pending]: 'warning',
+  // AlertState.Pending is not included because the 'pending' value is already covered by `PromAlertingRuleState.Pending`
+  // [AlertState.Pending]: 'warning',
   [AlertState.Unknown]: 'info',
 };
 
@@ -169,9 +207,8 @@ export function getFirstActiveAt(promRule?: AlertingRule) {
   if (!promRule?.alerts) {
     return null;
   }
-  return promRule.alerts.reduce((prev, alert) => {
-    const isNotNormal =
-      mapStateWithReasonToBaseState(alert.state as GrafanaAlertStateWithReason) !== GrafanaAlertState.Normal;
+  return promRule.alerts.reduce<Date | null>((prev, alert) => {
+    const isNotNormal = mapStateWithReasonToBaseState(alert.state) !== GrafanaAlertState.Normal;
     if (alert.activeAt && isNotNormal) {
       const activeAt = new Date(alert.activeAt);
       if (prev === null || prev.getTime() > activeAt.getTime()) {
@@ -179,7 +216,7 @@ export function getFirstActiveAt(promRule?: AlertingRule) {
       }
     }
     return prev;
-  }, null as Date | null);
+  }, null);
 }
 
 /**
@@ -229,16 +266,16 @@ export const getAlertInfo = (alert: RulerRuleDTO, currentEvaluation: string): Al
   if (isAlertingRulerRule(alert)) {
     return {
       alertName: alert.alert,
-      forDuration: alert.for ?? '1m',
-      evaluationsToFire: getNumberEvaluationsToStartAlerting(alert.for ?? '1m', currentEvaluation),
+      forDuration: alert.for ?? '0s',
+      evaluationsToFire: getNumberEvaluationsToStartAlerting(alert.for ?? '0s', currentEvaluation),
     };
   }
   return emptyAlert;
 };
 
 export const getNumberEvaluationsToStartAlerting = (forDuration: string, currentEvaluation: string) => {
-  const evalNumberMs = safeParseDurationstr(currentEvaluation);
-  const forNumber = safeParseDurationstr(forDuration);
+  const evalNumberMs = safeParsePrometheusDuration(currentEvaluation);
+  const forNumber = safeParsePrometheusDuration(forDuration);
   if (forNumber === 0 && evalNumberMs !== 0) {
     return 1;
   }

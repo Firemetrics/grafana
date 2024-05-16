@@ -2,6 +2,10 @@
 aliases:
   - ../../permissions/dashboard_folder_permissions/
   - ../manage-users-and-permissions/manage-dashboard-permissions/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Manage dashboard permissions
 weight: 500
 ---
@@ -14,12 +18,12 @@ For more information about dashboard permissions, refer to [Dashboard permission
 
 ## Grant folder permissions
 
-When you grant user permissions for folders, that setting applies to all dashboards and subfolders contained in the folder. Consider using this approach to assigning dashboard and folder permissions when you have users or teams who require access to groups of related dashboards or folders.
+When you grant user permissions for folders, that setting applies to all dashboards and subfolders contained in the folder. Consider using this approach to assigning dashboard and folder permissions when you have users, service accounts or teams who require access to groups of related dashboards or folders.
 
 ### Before you begin
 
 - Ensure you have organization administrator privileges
-- Identify the dashboard folder permissions you want to modify and the users or teams to which you want to grant access. For more information about dashboard permissions, refer to [Dashboard permissions]({{< relref "../../roles-and-permissions/#dashboard-permissions" >}}).
+- Identify the dashboard folder permissions you want to modify and the users, service accounts or teams to which you want to grant access. For more information about dashboard permissions, refer to [Dashboard permissions]({{< relref "../../roles-and-permissions/#dashboard-permissions" >}}).
 
 **To grant dashboard folder permissions**:
 
@@ -27,8 +31,8 @@ When you grant user permissions for folders, that setting applies to all dashboa
 1. In the left-side menu, click **Dashboards**.
 1. Hover your mouse cursor over a folder and click **Go to folder**.
 1. Click the **Permissions** tab, and then click **Add a permission**.
-1. In the **Add Permission For** dropdown menu, select **User**, **Team**, or **Role**.
-1. Select the user, team, or role.
+1. In the **Add Permission For** dropdown menu, select **User**, **Service Account**, **Team**, or **Role**.
+1. Select the user, service account, team, or role.
 1. Select the permission and click **Save**.
 
 ## Grant dashboard permissions
@@ -46,7 +50,7 @@ Grant dashboard permissions when you want to restrict or enhance dashboard acces
 ### Before you begin
 
 - Ensure you have organization administrator privileges
-- Identify the dashboard permissions you want to modify and the users or teams to which you want to grant access
+- Identify the dashboard permissions you want to modify and the users, service accounts, or teams to which you want to grant access
 
 **To grant dashboard permissions**:
 
@@ -55,8 +59,8 @@ Grant dashboard permissions when you want to restrict or enhance dashboard acces
 1. Open a dashboard.
 1. In the top right corner of the dashboard, click **Dashboard settings** (the cog icon).
 1. Click **Permissions** in left-side menu, and then **Add a permission**.
-1. In the **Add Permission For** dropdown menu, select **User**, **Team**, or **Role**.
-1. Select the user, team, or role.
+1. In the **Add Permission For** dropdown menu, select **User**, **Service Account**, **Team**, or **Role**.
+1. Select the user, service account, team, or role.
 1. Select the permission and click **Save**.
 
 ## Enable viewers to edit (but not save) dashboards and use Explore
@@ -64,10 +68,6 @@ Grant dashboard permissions when you want to restrict or enhance dashboard acces
 By default, the viewer organization role does not allow viewers to create dashboards or use the Explore feature. However, by modifying a configuration setting, you can allow viewers to edit a panel and make changes to a dashboard but not save those changes. This setting also enables viewers to use the Explore feature.
 
 This modification is useful for public Grafana installations where you want anonymous users to be able to edit panels and queries but not save or create new dashboards.
-
-{{% admonition type="note" %}}
-If you use Grafana Enterprise and customize users' permissions using RBAC, the RBAC permissions override the functionality enabled by the `viewers_can_edit` flag.
-{{% /admonition %}}
 
 ### Before you begin
 

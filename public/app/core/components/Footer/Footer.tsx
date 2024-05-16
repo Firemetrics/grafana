@@ -48,17 +48,19 @@ export function getVersionMeta(version: string) {
   };
 }
 
-export function getVersionLinks(): FooterLink[] {
+export function getVersionLinks(hideEdition?: boolean): FooterLink[] {
   const { buildInfo, licenseInfo } = config;
   const links: FooterLink[] = [];
   const stateInfo = licenseInfo.stateInfo ? ` (${licenseInfo.stateInfo})` : '';
 
-  links.push({
-    target: '_blank',
-    id: 'license',
-    text: `${buildInfo.edition}${stateInfo}`,
-    url: licenseInfo.licenseUrl,
-  });
+  if (!hideEdition) {
+    links.push({
+      target: '_blank',
+      id: 'license',
+      text: `${buildInfo.edition}${stateInfo}`,
+      url: licenseInfo.licenseUrl,
+    });
+  }
 
   if (buildInfo.hideVersion) {
     return links;
@@ -69,7 +71,7 @@ export function getVersionLinks(): FooterLink[] {
   links.push({
     target: '_blank',
     id: 'version',
-    text: `v${buildInfo.version} (${buildInfo.commit})`,
+    text: buildInfo.versionString,
     url: hasReleaseNotes ? `https://github.com/grafana/grafana/blob/main/CHANGELOG.md` : undefined,
   });
 
@@ -93,17 +95,18 @@ export function setFooterLinksFn(fn: typeof getFooterLinks) {
 export interface Props {
   /** Link overrides to show specific links in the UI */
   customLinks?: FooterLink[] | null;
+  hideEdition?: boolean;
 }
 
-export const Footer = React.memo(({ customLinks }: Props) => {
-  const links = (customLinks || getFooterLinks()).concat(getVersionLinks());
+export const Footer = React.memo(({ customLinks, hideEdition }: Props) => {
+  const links = (customLinks || getFooterLinks()).concat(getVersionLinks(hideEdition));
 
   return (
     <footer className="footer">
       <div className="text-center">
         <ul>
-          {links.map((link) => (
-            <li key={link.text}>
+          {links.map((link, index) => (
+            <li key={index}>
               <FooterItem item={link} />
             </li>
           ))}

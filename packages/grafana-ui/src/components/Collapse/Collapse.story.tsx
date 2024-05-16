@@ -1,9 +1,7 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
+import { useArgs } from '@storybook/preview-api';
 import { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
-
-import { withCenteredStory, withHorizontallyCenteredStory } from '../../utils/storybook/withCenteredStory';
 
 import { Collapse, ControlledCollapse } from './Collapse';
 import mdx from './Collapse.mdx';
@@ -13,7 +11,6 @@ const EXCLUDED_PROPS = ['className', 'onToggle'];
 const meta: Meta<typeof Collapse> = {
   title: 'Layout/Collapse',
   component: Collapse,
-  decorators: [withCenteredStory, withHorizontallyCenteredStory],
   parameters: {
     docs: {
       page: mdx,

@@ -1,11 +1,10 @@
-import produce from 'immer';
-import React from 'react';
+import { produce } from 'immer';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 import { SIGV4ConnectionConfig } from '@grafana/aws-sdk';
 import { DataSourcePluginOptionsEditorProps, SelectableValue } from '@grafana/data';
-import { DataSourceHttpSettings, InlineField, InlineFormLabel, InlineSwitch, Select } from '@grafana/ui';
-import { Span } from '@grafana/ui/src/unstable';
+import { DataSourceHttpSettings, InlineField, InlineFormLabel, InlineSwitch, Select, Text } from '@grafana/ui';
 import { config } from 'app/core/config';
 
 import { AlertManagerDataSourceJsonData, AlertManagerImplementation } from './types';
@@ -33,6 +32,17 @@ const IMPL_OPTIONS: Array<SelectableValue<AlertManagerImplementation>> = [
 
 export const ConfigEditor = (props: Props) => {
   const { options, onOptionsChange } = props;
+
+  // As we default to Mimir, we need to make sure the implementation is set from the start
+  useEffect(() => {
+    if (!options.jsonData.implementation) {
+      onOptionsChange(
+        produce(options, (draft) => {
+          draft.jsonData.implementation = AlertManagerImplementation.mimir;
+        })
+      );
+    }
+  }, [options, onOptionsChange]);
 
   return (
     <>
@@ -76,9 +86,9 @@ export const ConfigEditor = (props: Props) => {
           </InlineField>
         </div>
         {options.jsonData.handleGrafanaManagedAlerts && (
-          <Span variant="bodySmall" color="secondary">
-            Make sure to enable the alert forwarding on the <Link to="/alerting/admin">admin page</Link>.
-          </Span>
+          <Text variant="bodySmall" color="secondary">
+            Make sure to enable the alert forwarding on the <Link to="/alerting/admin">settings page</Link>.
+          </Text>
         )}
       </div>
       <DataSourceHttpSettings

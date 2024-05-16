@@ -1,8 +1,7 @@
 import { createAction, createReducer } from '@reduxjs/toolkit';
 
-import { DataQuery, getDefaultRelativeTimeRange, RelativeTimeRange } from '@grafana/data';
-import { getNextRefIdChar } from 'app/core/utils/query';
-import { findDataSourceFromExpressionRecursive } from 'app/features/alerting/utils/dataSourceFromExpression';
+import { DataQuery, getDefaultRelativeTimeRange, getNextRefId, rangeUtil, RelativeTimeRange } from '@grafana/data';
+import { findDataSourceFromExpressionRecursive } from 'app/features/alerting/unified/utils/dataSourceFromExpression';
 import { dataSource as expressionDatasource } from 'app/features/expressions/ExpressionDatasource';
 import { isExpressionQuery } from 'app/features/expressions/guards';
 import { ExpressionDatasourceUID, ExpressionQuery, ExpressionQueryType } from 'app/features/expressions/types';
@@ -35,12 +34,15 @@ export const setDataQueries = createAction<AlertQuery[]>('setDataQueries');
 
 export const addNewExpression = createAction<ExpressionQueryType>('addNewExpression');
 export const removeExpression = createAction<string>('removeExpression');
+export const removeExpressions = createAction('removeExpressions');
+export const addExpressions = createAction<AlertQuery[]>('addExpressions');
 export const updateExpression = createAction<ExpressionQuery>('updateExpression');
 export const updateExpressionRefId = createAction<{ oldRefId: string; newRefId: string }>('updateExpressionRefId');
 export const rewireExpressions = createAction<{ oldRefId: string; newRefId: string }>('rewireExpressions');
 export const updateExpressionType = createAction<{ refId: string; type: ExpressionQueryType }>('updateExpressionType');
 export const updateExpressionTimeRange = createAction('updateExpressionTimeRange');
 export const updateMaxDataPoints = createAction<{ refId: string; maxDataPoints: number }>('updateMaxDataPoints');
+export const updateMinInterval = createAction<{ refId: string; minInterval: string }>('updateMinInterval');
 
 export const setRecordingRulesQueries = createAction<{ recordingRuleQueries: AlertQuery[]; expression: string }>(
   'setRecordingRulesQueries'
@@ -77,7 +79,7 @@ export const queriesAndExpressionsReducer = createReducer(initialState, (builder
       const query = payload.recordingRuleQueries[0];
       const recordingRuleQuery = {
         ...query,
-        ...{ expr: payload.expression, model: { expr: payload.expression, refId: query.model.refId } },
+        ...{ expr: payload.expression, model: query?.model },
       };
 
       state.queries = [recordingRuleQuery];
@@ -90,6 +92,19 @@ export const queriesAndExpressionsReducer = createReducer(initialState, (builder
               model: {
                 ...query.model,
                 maxDataPoints: action.payload.maxDataPoints,
+              },
+            }
+          : query;
+      });
+    })
+    .addCase(updateMinInterval, (state, action) => {
+      state.queries = state.queries.map((query) => {
+        return query.refId === action.payload.refId
+          ? {
+              ...query,
+              model: {
+                ...query.model,
+                intervalMs: action.payload.minInterval ? rangeUtil.intervalToMs(action.payload.minInterval) : undefined,
               },
             }
           : query;
@@ -110,6 +125,12 @@ export const queriesAndExpressionsReducer = createReducer(initialState, (builder
     })
     .addCase(removeExpression, (state, { payload }) => {
       state.queries = state.queries.filter((query) => query.refId !== payload);
+    })
+    .addCase(removeExpressions, (state) => {
+      state.queries = state.queries.filter((query) => !isExpressionQuery(query.model));
+    })
+    .addCase(addExpressions, (state, { payload }) => {
+      state.queries = [...state.queries, ...payload];
     })
     .addCase(updateExpression, (state, { payload }) => {
       state.queries = state.queries.map((query) => {
@@ -191,7 +212,7 @@ const addQuery = (
   queries: AlertQuery[],
   queryToAdd: Pick<AlertQuery, 'model' | 'datasourceUid' | 'relativeTimeRange'>
 ): AlertQuery[] => {
-  const refId = getNextRefIdChar(queries);
+  const refId = getNextRefId(queries);
   const query: AlertQuery = {
     ...queryToAdd,
     refId,

@@ -2,8 +2,12 @@
 aliases:
   - ../../installation/mac/
 description: How to install Grafana OSS or Enterprise on macOS
-title: Install Grafana on macOS
+labels:
+  products:
+    - enterprise
+    - oss
 menuTitle: macOS
+title: Install Grafana on macOS
 weight: 600
 ---
 
@@ -56,6 +60,10 @@ To install Grafana on macOS using the standalone binaries, complete the followin
    ```bash
    ./bin/grafana server
    ```
+
+Alternatively, watch the Grafana for Beginners video below:
+
+{{< youtube id="T51Qa7eE3W8" >}}
 
 ## Next steps
 

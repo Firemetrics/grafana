@@ -174,6 +174,22 @@ describe('AzureMonitorUrlBuilder', () => {
         '/subscriptions/sub/resource-uri/resource/providers/microsoft.insights/metricdefinitions?api-version=2017-05-01-preview&metricnamespace=custom%2Fnamespace'
       );
     });
+
+    it('adds a region with multiple resources', () => {
+      const url = UrlBuilder.buildAzureMonitorGetMetricNamesUrl(
+        'baseUrl',
+        'apiVersion',
+        {
+          resourceUri: '/subscriptions/sub/resource-uri/resource',
+        },
+        templateSrv,
+        true,
+        'region'
+      );
+      expect(url).toBe(
+        'baseUrl/subscriptions/sub/resource-uri/resource/providers/microsoft.insights/metricdefinitions?api-version=apiVersion&region=region'
+      );
+    });
   });
 
   describe('Legacy query object', () => {
@@ -395,6 +411,24 @@ describe('AzureMonitorUrlBuilder', () => {
         expect(url).toBe(
           '/subscriptions/sub1/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/rn1/queueServices/default/' +
             'providers/microsoft.insights/metricdefinitions?api-version=2017-05-01-preview'
+        );
+      });
+    });
+    describe('when multiple resources are selected', () => {
+      it('passes metricNamespace as query param', () => {
+        const url = UrlBuilder.buildAzureMonitorGetMetricNamesUrl(
+          '',
+          '2017-05-01-preview',
+          {
+            resourceUri: '/subscriptions/sub/resource-uri/resource',
+            metricNamespace: 'Microsoft.Sql/servers',
+          },
+          templateSrv,
+          true,
+          'region'
+        );
+        expect(url).toBe(
+          '/subscriptions/sub/resource-uri/resource/providers/microsoft.insights/metricdefinitions?api-version=2017-05-01-preview&metricnamespace=Microsoft.Sql%2Fservers&region=region'
         );
       });
     });

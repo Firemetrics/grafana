@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/grafana/pkg/infra/metrics"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/datasources"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/quota"
 	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/util"
@@ -26,18 +27,19 @@ type Store interface {
 	GetDataSource(context.Context, *datasources.GetDataSourceQuery) (*datasources.DataSource, error)
 	GetDataSources(context.Context, *datasources.GetDataSourcesQuery) ([]*datasources.DataSource, error)
 	GetDataSourcesByType(context.Context, *datasources.GetDataSourcesByTypeQuery) ([]*datasources.DataSource, error)
-	GetDefaultDataSource(context.Context, *datasources.GetDefaultDataSourceQuery) (*datasources.DataSource, error)
 	DeleteDataSource(context.Context, *datasources.DeleteDataSourceCommand) error
 	AddDataSource(context.Context, *datasources.AddDataSourceCommand) (*datasources.DataSource, error)
 	UpdateDataSource(context.Context, *datasources.UpdateDataSourceCommand) (*datasources.DataSource, error)
 	GetAllDataSources(ctx context.Context, query *datasources.GetAllDataSourcesQuery) (res []*datasources.DataSource, err error)
+	GetPrunableProvisionedDataSources(ctx context.Context) (res []*datasources.DataSource, err error)
 
 	Count(context.Context, *quota.ScopeParameters) (*quota.Map, error)
 }
 
 type SqlStore struct {
-	db     db.DB
-	logger log.Logger
+	db       db.DB
+	logger   log.Logger
+	features featuremgmt.FeatureToggles
 }
 
 func CreateStore(db db.DB, logger log.Logger) *SqlStore {
@@ -59,9 +61,15 @@ func (ss *SqlStore) GetDataSource(ctx context.Context, query *datasources.GetDat
 	})
 }
 
-func (ss *SqlStore) getDataSource(ctx context.Context, query *datasources.GetDataSourceQuery, sess *db.Session) (*datasources.DataSource, error) {
+func (ss *SqlStore) getDataSource(_ context.Context, query *datasources.GetDataSourceQuery, sess *db.Session) (*datasources.DataSource, error) {
 	if query.OrgID == 0 || (query.ID == 0 && len(query.Name) == 0 && len(query.UID) == 0) {
 		return nil, datasources.ErrDataSourceIdentifierNotSet
+	}
+
+	if len(query.UID) > 0 {
+		if err := util.ValidateUID(query.UID); err != nil {
+			logDeprecatedInvalidDsUid(ss.logger, query.UID, query.Name, "read", fmt.Errorf("invalid UID"))
+		}
 	}
 
 	datasource := &datasources.DataSource{Name: query.Name, OrgID: query.OrgID, ID: query.ID, UID: query.UID}
@@ -107,26 +115,31 @@ func (ss *SqlStore) GetDataSourcesByType(ctx context.Context, query *datasources
 		return nil, fmt.Errorf("datasource type cannot be empty")
 	}
 
+	typeQuery := "type=?"
+	args := []interface{}{query.Type}
+	for _, alias := range query.AliasIDs {
+		typeQuery += " OR type=?"
+		args = append(args, alias)
+	}
+	typeQuery = "(" + typeQuery + ")"
+
 	dataSources := make([]*datasources.DataSource, 0)
 	return dataSources, ss.db.WithDbSession(ctx, func(sess *db.Session) error {
 		if query.OrgID > 0 {
-			return sess.Where("type=? AND org_id=?", query.Type, query.OrgID).Asc("id").Find(&dataSources)
+			args = append([]interface{}{query.OrgID}, args...)
+			return sess.Where("org_id=? AND "+typeQuery, args...).Asc("id").Find(&dataSources)
 		}
-		return sess.Where("type=?", query.Type).Asc("id").Find(&dataSources)
+		return sess.Where(typeQuery, args...).Asc("id").Find(&dataSources)
 	})
 }
 
-// GetDefaultDataSource is used to get the default datasource of organization
-func (ss *SqlStore) GetDefaultDataSource(ctx context.Context, query *datasources.GetDefaultDataSourceQuery) (*datasources.DataSource, error) {
-	dataSource := datasources.DataSource{}
-	return &dataSource, ss.db.WithDbSession(ctx, func(sess *db.Session) error {
-		exists, err := sess.Where("org_id=? AND is_default=?", query.OrgID, true).Get(&dataSource)
+// GetPrunableProvisionedDataSources returns all data sources that can be pruned
+func (ss *SqlStore) GetPrunableProvisionedDataSources(ctx context.Context) ([]*datasources.DataSource, error) {
+	prunableQuery := "is_prunable  = ?"
 
-		if !exists {
-			return datasources.ErrDataSourceNotFound
-		}
-
-		return err
+	dataSources := make([]*datasources.DataSource, 0)
+	return dataSources, ss.db.WithDbSession(ctx, func(sess *db.Session) error {
+		return sess.Where(prunableQuery, ss.db.GetDialect().BooleanStr(true)).Asc("id").Find(&dataSources)
 	})
 }
 
@@ -165,7 +178,7 @@ func (ss *SqlStore) DeleteDataSource(ctx context.Context, cmd *datasources.Delet
 		}
 
 		// Publish data source deletion event
-		if cmd.DeletedDatasourcesCount > 0 {
+		if cmd.DeletedDatasourcesCount > 0 && !cmd.SkipPublish {
 			sess.PublishAfterCommit(&events.DataSourceDeleted{
 				Timestamp: time.Now(),
 				Name:      ds.Name,
@@ -244,8 +257,11 @@ func (ss *SqlStore) AddDataSource(ctx context.Context, cmd *datasources.AddDataS
 				return fmt.Errorf("failed to generate UID for datasource %q: %w", cmd.Name, err)
 			}
 			cmd.UID = uid
-		} else if !util.IsValidShortUID(cmd.UID) {
-			logDeprecatedInvalidDsUid(ss.logger, cmd.UID, cmd.Name)
+		} else if err := util.ValidateUID(cmd.UID); err != nil {
+			logDeprecatedInvalidDsUid(ss.logger, cmd.UID, cmd.Name, "create", err)
+			if ss.features != nil && ss.features.IsEnabled(ctx, featuremgmt.FlagAutofixDSUID) {
+				return fmt.Errorf("invalid UID for datasource %s: %w", cmd.Name, err)
+			}
 		}
 
 		ds = &datasources.DataSource{
@@ -267,6 +283,8 @@ func (ss *SqlStore) AddDataSource(ctx context.Context, cmd *datasources.AddDataS
 			Version:         1,
 			ReadOnly:        cmd.ReadOnly,
 			UID:             cmd.UID,
+			IsPrunable:      cmd.IsPrunable,
+			APIVersion:      cmd.APIVersion,
 		}
 
 		if _, err := sess.Insert(ds); err != nil {
@@ -315,6 +333,15 @@ func (ss *SqlStore) UpdateDataSource(ctx context.Context, cmd *datasources.Updat
 			cmd.JsonData = simplejson.New()
 		}
 
+		if cmd.UID != "" {
+			if err := util.ValidateUID(cmd.UID); err != nil {
+				logDeprecatedInvalidDsUid(ss.logger, cmd.UID, cmd.Name, "update", err)
+				if ss.features != nil && ss.features.IsEnabled(ctx, featuremgmt.FlagAutofixDSUID) {
+					cmd.UID = util.AutofixUID(cmd.UID)
+				}
+			}
+		}
+
 		ds = &datasources.DataSource{
 			ID:              cmd.ID,
 			OrgID:           cmd.OrgID,
@@ -334,12 +361,15 @@ func (ss *SqlStore) UpdateDataSource(ctx context.Context, cmd *datasources.Updat
 			ReadOnly:        cmd.ReadOnly,
 			Version:         cmd.Version + 1,
 			UID:             cmd.UID,
+			IsPrunable:      cmd.IsPrunable,
+			APIVersion:      cmd.APIVersion,
 		}
 
 		sess.UseBool("is_default")
 		sess.UseBool("basic_auth")
 		sess.UseBool("with_credentials")
 		sess.UseBool("read_only")
+		sess.UseBool("is_prunable")
 		// Make sure database field is zeroed out if empty. We want to migrate away from this field.
 		sess.MustCols("database")
 		// Make sure password are zeroed out if empty. We do this as we want to migrate passwords from
@@ -350,6 +380,7 @@ func (ss *SqlStore) UpdateDataSource(ctx context.Context, cmd *datasources.Updat
 		// Make sure secure json data is zeroed out if empty. We do this as we want to migrate secrets from
 		// secure json data to the unified secrets table.
 		sess.MustCols("secure_json_data")
+		sess.MustCols("api_version")
 
 		var updateSession *xorm.Session
 		if cmd.Version != 0 {
@@ -379,10 +410,6 @@ func (ss *SqlStore) UpdateDataSource(ctx context.Context, cmd *datasources.Updat
 			}
 		}
 
-		if !util.IsValidShortUID(cmd.UID) {
-			logDeprecatedInvalidDsUid(ss.logger, cmd.UID, cmd.Name)
-		}
-
 		return err
 	})
 }
@@ -406,11 +433,10 @@ func generateNewDatasourceUid(sess *db.Session, orgId int64) (string, error) {
 
 var generateNewUid func() string = util.GenerateShortUID
 
-func logDeprecatedInvalidDsUid(logger log.Logger, uid, name string) {
+func logDeprecatedInvalidDsUid(logger log.Logger, uid string, name string, action string, err error) {
 	logger.Warn(
-		"Invalid datasource uid. The use of invalid uids is deprecated and this operation will fail in a future "+
-			"version of Grafana. A valid uid is a combination of a-z, A-Z, 0-9 (alphanumeric), - (dash) and _ "+
-			"(underscore) characters, maximum length 40",
-		"uid", uid, "name", name,
+		"Invalid datasource uid. A valid uid is a combination of a-z, A-Z, 0-9 (alphanumeric), - (dash) and _ "+
+			"(underscore) characters, maximum length 40. Invalid characters will be replaced by dashes.",
+		"uid", uid, "action", action, "name", name, "error", err,
 	)
 }

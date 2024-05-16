@@ -29,13 +29,15 @@ export type {
   FieldColorSeriesByMode,
   FieldColor,
   GridPos,
+  Threshold,
+  ThresholdsConfig,
+  ValueMapping,
   ValueMap,
+  RangeMap,
   RegexMap,
   SpecialValueMap,
   ValueMappingResult,
-  LibraryPanelRef,
-  GraphPanel,
-  HeatmapPanel
+  LibraryPanelRef
 } from './raw/dashboard/x/dashboard_types.gen';
 
 // Raw generated enums and default consts from dashboard kind.
@@ -44,11 +46,11 @@ export {
   defaultAnnotationPanelFilter,
   VariableRefresh,
   VariableSort,
-  LoadingState,
   defaultDashboardLink,
   FieldColorModeId,
   defaultGridPos,
   ThresholdsMode,
+  defaultThresholdsConfig,
   MappingType,
   SpecialValueMatch,
   DashboardCursorSync,
@@ -70,11 +72,8 @@ export type {
   AnnotationQuery,
   VariableModel,
   DataSourceRef,
-  Threshold,
-  ThresholdsConfig,
-  ValueMapping,
-  RangeMap,
   DataTransformerConfig,
+  TimePickerConfig,
   Panel,
   FieldConfigSource,
   MatcherConfig,
@@ -97,16 +96,13 @@ export {
   defaultAnnotationQuery,
   defaultVariableModel,
   VariableHide,
-  defaultThresholdsConfig,
+  defaultTimePickerConfig,
   defaultPanel,
   defaultFieldConfigSource,
   defaultMatcherConfig,
   defaultFieldConfig,
   defaultRowPanel
 } from './veneer/dashboard.types';
-
-// Raw generated types from Folder kind.
-export type { Folder } from './raw/folder/x/folder_types.gen';
 
 // Raw generated types from LibraryPanel kind.
 export type {
@@ -125,19 +121,11 @@ export type {
 // TODO generate code such that tsc enforces type compatibility between raw and veneer decls
 export type { LibraryPanel } from './veneer/librarypanel.types';
 
-// Raw generated types from Playlist kind.
-export type {
-  Playlist,
-  PlaylistItem
-} from './raw/playlist/x/playlist_types.gen';
-
-// Raw generated enums and default consts from playlist kind.
-export { defaultPlaylist } from './raw/playlist/x/playlist_types.gen';
-
 // Raw generated types from Preferences kind.
 export type {
   Preferences,
-  QueryHistoryPreference
+  QueryHistoryPreference,
+  CookiePreferences
 } from './raw/preferences/x/preferences_types.gen';
 
 // Raw generated types from PublicDashboard kind.

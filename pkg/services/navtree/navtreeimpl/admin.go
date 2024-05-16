@@ -1,34 +1,28 @@
 package navtreeimpl
 
 import (
+	"github.com/grafana/grafana/pkg/login/social"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
+	"github.com/grafana/grafana/pkg/services/accesscontrol/ssoutils"
 	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/services/correlations"
-	"github.com/grafana/grafana/pkg/services/datasources"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/navtree"
+	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginaccesscontrol"
 	"github.com/grafana/grafana/pkg/services/serviceaccounts"
 )
 
 func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink, error) {
 	var configNodes []*navtree.NavLink
+	ctx := c.Req.Context()
 	hasAccess := ac.HasAccess(s.accessControl, c)
-	hasGlobalAccess := ac.HasGlobalAccess(s.accessControl, s.accesscontrolService, c)
+	hasGlobalAccess := ac.HasGlobalAccess(s.accessControl, s.authnService, c)
 	orgsAccessEvaluator := ac.EvalPermission(ac.ActionOrgsRead)
-	authConfigUIAvailable := s.license.FeatureEnabled("saml")
+	authConfigUIAvailable := s.license.FeatureEnabled(social.SAMLProviderName) || s.cfg.LDAPAuthEnabled
 
-	if hasAccess(datasources.ConfigurationPageAccess) {
-		configNodes = append(configNodes, &navtree.NavLink{
-			Text:     "Data sources",
-			Icon:     "database",
-			SubTitle: "Add and configure data sources",
-			Id:       "datasources",
-			Url:      s.cfg.AppSubURL + "/datasources",
-		})
-	}
-
-	// FIXME: while we don't have a permissions for listing plugins the legacy check has to stay as a default
+	// FIXME: If plugin admin is disabled or externally managed, server admins still need to access the page, this is why
+	// while we don't have a permissions for listing plugins the legacy check has to stay as a default
 	if pluginaccesscontrol.ReqCanAdminPlugins(s.cfg)(c) || hasAccess(pluginaccesscontrol.AdminAccessEvaluator) {
 		configNodes = append(configNodes, &navtree.NavLink{
 			Text:     "Plugins",
@@ -65,7 +59,7 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 		})
 	}
 
-	disabled, err := s.apiKeyService.IsDisabled(c.Req.Context(), c.OrgID)
+	disabled, err := s.apiKeyService.IsDisabled(ctx, c.SignedInUser.GetOrgID())
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +83,8 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 		})
 	}
 
-	if authConfigUIAvailable && hasAccess(evalAuthenticationSettings()) {
+	if authConfigUIAvailable && hasAccess(ssoutils.EvalAuthenticationSettings(s.cfg)) ||
+		(hasAccess(ssoutils.OauthSettingsEvaluator(s.cfg)) && s.features.IsEnabled(ctx, featuremgmt.FlagSsoSettingsApi)) {
 		configNodes = append(configNodes, &navtree.NavLink{
 			Text:     "Authentication",
 			Id:       "authentication",
@@ -111,7 +106,17 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 		})
 	}
 
-	if s.features.IsEnabled(featuremgmt.FlagCorrelations) && hasAccess(correlations.ConfigurationPageAccess) {
+	if s.features.IsEnabled(ctx, featuremgmt.FlagFeatureToggleAdminPage) && hasAccess(ac.EvalPermission(ac.ActionFeatureManagementRead)) {
+		configNodes = append(configNodes, &navtree.NavLink{
+			Text:     "Feature Toggles",
+			SubTitle: "View and edit feature toggles",
+			Id:       "feature-toggles",
+			Url:      s.cfg.AppSubURL + "/admin/featuretoggles",
+			Icon:     "toggle-on",
+		})
+	}
+
+	if s.features.IsEnabled(ctx, featuremgmt.FlagCorrelations) && hasAccess(correlations.ConfigurationPageAccess) {
 		configNodes = append(configNodes, &navtree.NavLink{
 			Text:     "Correlations",
 			Icon:     "gf-glue",
@@ -121,13 +126,7 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 		})
 	}
 
-	if s.cfg.LDAPAuthEnabled && hasAccess(ac.EvalPermission(ac.ActionLDAPStatusRead)) {
-		configNodes = append(configNodes, &navtree.NavLink{
-			Text: "LDAP", Id: "ldap", Url: s.cfg.AppSubURL + "/admin/ldap", Icon: "book",
-		})
-	}
-
-	if hasAccess(ac.EvalPermission(ac.ActionSettingsRead, ac.ScopeSettingsAll)) && s.features.IsEnabled(featuremgmt.FlagStorage) {
+	if hasAccess(ac.EvalPermission(ac.ActionSettingsRead, ac.ScopeSettingsAll)) && s.features.IsEnabled(ctx, featuremgmt.FlagStorage) {
 		storage := &navtree.NavLink{
 			Text:     "Storage",
 			Id:       "storage",
@@ -138,10 +137,20 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 		configNodes = append(configNodes, storage)
 	}
 
+	if s.features.IsEnabled(ctx, featuremgmt.FlagOnPremToCloudMigrations) && c.SignedInUser.HasRole(org.RoleAdmin) {
+		migrateToCloud := &navtree.NavLink{
+			Text:     "Migrate to Grafana Cloud",
+			Id:       "migrate-to-cloud",
+			SubTitle: "Copy configuration from your self-managed installation to a cloud stack",
+			Url:      s.cfg.AppSubURL + "/admin/migrate-to-cloud",
+		}
+		configNodes = append(configNodes, migrateToCloud)
+	}
+
 	configNode := &navtree.NavLink{
 		Id:         navtree.NavIDCfg,
 		Text:       "Administration",
-		SubTitle:   "Organization: " + c.OrgName,
+		SubTitle:   "Organization: " + c.SignedInUser.GetOrgName(),
 		Icon:       "cog",
 		SortWeight: navtree.WeightConfig,
 		Children:   configNodes,
@@ -154,11 +163,4 @@ func (s *ServiceImpl) getAdminNode(c *contextmodel.ReqContext) (*navtree.NavLink
 func enableServiceAccount(s *ServiceImpl, c *contextmodel.ReqContext) bool {
 	hasAccess := ac.HasAccess(s.accessControl, c)
 	return hasAccess(serviceaccounts.AccessEvaluator)
-}
-
-func evalAuthenticationSettings() ac.Evaluator {
-	return ac.EvalAll(
-		ac.EvalPermission(ac.ActionSettingsWrite, ac.ScopeSettingsSAML),
-		ac.EvalPermission(ac.ActionSettingsRead, ac.ScopeSettingsSAML),
-	)
 }

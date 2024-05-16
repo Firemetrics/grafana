@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+
 	"errors"
 	"fmt"
 	"time"
@@ -10,19 +11,13 @@ import (
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 )
 
-func extServiceRoleUID(externalServiceID string) string {
-	uid := fmt.Sprintf("%s%s_permissions", accesscontrol.ExternalServiceRoleUIDPrefix, externalServiceID)
-	return uid
-}
-
 func extServiceRoleName(externalServiceID string) string {
 	name := fmt.Sprintf("%s%s:permissions", accesscontrol.ExternalServiceRolePrefix, externalServiceID)
 	return name
 }
 
 func (s *AccessControlStore) DeleteExternalServiceRole(ctx context.Context, externalServiceID string) error {
-	uid := extServiceRoleUID(externalServiceID)
-
+	uid := accesscontrol.PrefixedRoleUID(extServiceRoleName(externalServiceID))
 	return s.sql.WithDbSession(ctx, func(sess *db.Session) error {
 		stored, errGet := getRoleByUID(ctx, sess, uid)
 		if errGet != nil {
@@ -82,11 +77,12 @@ func (s *AccessControlStore) SaveExternalServiceRole(ctx context.Context, cmd ac
 }
 
 func genExternalServiceRole(cmd accesscontrol.SaveExternalServiceRoleCommand) accesscontrol.Role {
+	name := extServiceRoleName(cmd.ExternalServiceID)
 	role := accesscontrol.Role{
-		OrgID:       cmd.OrgID,
+		OrgID:       accesscontrol.GlobalOrgID, // External Service Roles are global
 		Version:     1,
-		Name:        extServiceRoleName(cmd.ExternalServiceID),
-		UID:         extServiceRoleUID(cmd.ExternalServiceID),
+		Name:        name,
+		UID:         accesscontrol.PrefixedRoleUID(name),
 		DisplayName: fmt.Sprintf("External Service %s Permissions", cmd.ExternalServiceID),
 		Description: fmt.Sprintf("External Service %s permissions", cmd.ExternalServiceID),
 		Group:       "External Service",
@@ -94,20 +90,14 @@ func genExternalServiceRole(cmd accesscontrol.SaveExternalServiceRoleCommand) ac
 		Created:     time.Now(),
 		Updated:     time.Now(),
 	}
-	if cmd.Global {
-		role.OrgID = accesscontrol.GlobalOrgID
-	}
 	return role
 }
 
 func genExternalServiceAssignment(cmd accesscontrol.SaveExternalServiceRoleCommand) accesscontrol.UserRole {
 	assignment := accesscontrol.UserRole{
-		OrgID:   cmd.OrgID,
+		OrgID:   cmd.AssignmentOrgID,
 		UserID:  cmd.ServiceAccountID,
 		Created: time.Now(),
-	}
-	if cmd.Global {
-		assignment.OrgID = accesscontrol.GlobalOrgID
 	}
 	return assignment
 }

@@ -12,15 +12,12 @@ node_modules
 pkg
 public/lib/monaco
 public/sass/*.generated.scss
+scripts/cli/bettererIssueTemplate.md
 scripts/grafana-server/tmp
 vendor
 
 # TS generate from cue by cuetsy
 **/*.gen.ts
-
-# Auto-generated internationalization files
-public/locales/_build/
-public/locales/**/*.js
 
 # Auto-generated theme files
 theme.light.generated.json
@@ -28,12 +25,8 @@ theme.dark.generated.json
 
 # Generated Swagger API specs
 public/api-merged.json
+public/api-enterprise-spec.json
 public/openapi3.json
 
-# Generated Kinds report
-kinds/report.json
-
-# Generated schema docs
-docs/sources/developers/kinds/
-
-scripts/cli/bettererIssueTemplate.md
+# Crowdin files
+public/locales/**/*.json

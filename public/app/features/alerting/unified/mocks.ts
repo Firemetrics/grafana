@@ -1,29 +1,40 @@
-import produce from 'immer';
+import { produce } from 'immer';
+import { Observable } from 'rxjs';
 
 import {
+  DataQuery,
+  DataQueryRequest,
+  DataQueryResponse,
   DataSourceApi,
   DataSourceInstanceSettings,
   DataSourceJsonData,
   DataSourcePluginMeta,
   DataSourceRef,
+  PluginExtensionLink,
+  PluginExtensionTypes,
+  PluginMeta,
+  PluginType,
   ScopedVars,
+  TestDataSourceResponse,
 } from '@grafana/data';
-import { config, DataSourceSrv, GetDataSourceListFilters } from '@grafana/runtime';
+import { DataSourceSrv, GetDataSourceListFilters, config } from '@grafana/runtime';
+import { defaultDashboard } from '@grafana/schema';
 import { contextSrv } from 'app/core/services/context_srv';
+import { parseMatchers } from 'app/features/alerting/unified/utils/alertmanager';
 import { DatasourceSrv } from 'app/features/plugins/datasource_srv';
 import {
-  AlertmanagerAlert,
   AlertManagerCortexConfig,
+  AlertState,
+  AlertmanagerAlert,
   AlertmanagerGroup,
   AlertmanagerStatus,
-  AlertState,
   GrafanaManagedReceiverConfig,
   MatcherOperator,
   Silence,
   SilenceState,
 } from 'app/plugins/datasource/alertmanager/types';
 import { configureStore } from 'app/store/configureStore';
-import { AccessControlAction, FolderDTO, NotifiersState, ReceiversState, StoreState } from 'app/types';
+import { AccessControlAction, DashboardDTO, FolderDTO, NotifiersState, ReceiversState, StoreState } from 'app/types';
 import {
   Alert,
   AlertingRule,
@@ -48,6 +59,8 @@ import {
   RulerRulesConfigDTO,
 } from 'app/types/unified-alerting-dto';
 
+import { DashboardSearchItem, DashboardSearchItemType } from '../../search/types';
+
 let nextDataSourceId = 1;
 
 export function mockDataSource<T extends DataSourceJsonData = DataSourceJsonData>(
@@ -56,12 +69,15 @@ export function mockDataSource<T extends DataSourceJsonData = DataSourceJsonData
 ): DataSourceInstanceSettings<T> {
   const id = partial.id ?? nextDataSourceId++;
 
+  const uid = partial.uid ?? `mock-ds-${nextDataSourceId}`;
+
   return {
     id,
-    uid: `mock-ds-${nextDataSourceId}`,
+    uid,
     type: 'prometheus',
     name: `Prometheus-${id}`,
     access: 'proxy',
+    url: `/api/datasources/proxy/uid/${uid}`,
     jsonData: {} as T,
     meta: {
       info: {
@@ -101,7 +117,6 @@ export const mockRulerGrafanaRule = (
       uid: '123',
       title: 'myalert',
       namespace_uid: '123',
-      namespace_id: 1,
       condition: 'A',
       no_data_state: GrafanaAlertStateDecision.Alerting,
       exec_err_state: GrafanaAlertStateDecision.Alerting,
@@ -155,6 +170,20 @@ export const mockRulerRuleGroup = (partial: Partial<RulerRuleGroupDTO> = {}): Ru
   ...partial,
 });
 
+export const promRuleFromRulerRule = (
+  rulerRule: RulerAlertingRuleDTO,
+  override?: Partial<AlertingRule>
+): AlertingRule => {
+  return mockPromAlertingRule({
+    name: rulerRule.alert,
+    query: rulerRule.expr,
+    labels: rulerRule.labels,
+    annotations: rulerRule.annotations,
+    type: PromRuleType.Alerting,
+    ...override,
+  });
+};
+
 export const mockPromAlertingRule = (partial: Partial<AlertingRule> = {}): AlertingRule => {
   return {
     type: PromRuleType.Alerting,
@@ -176,21 +205,20 @@ export const mockPromAlertingRule = (partial: Partial<AlertingRule> = {}): Alert
   };
 };
 
-export const mockGrafanaRulerRule = (partial: Partial<RulerGrafanaRuleDTO> = {}): RulerGrafanaRuleDTO => {
+export const mockGrafanaRulerRule = (partial: Partial<GrafanaRuleDefinition> = {}): RulerGrafanaRuleDTO => {
   return {
     for: '',
     annotations: {},
     labels: {},
     grafana_alert: {
-      ...partial,
       uid: '',
       title: 'my rule',
-      namespace_uid: '',
-      namespace_id: 0,
+      namespace_uid: 'NAMESPACE_UID',
       condition: '',
       no_data_state: GrafanaAlertStateDecision.NoData,
       exec_err_state: GrafanaAlertStateDecision.Error,
       data: [],
+      ...partial,
     },
   };
 };
@@ -281,6 +309,18 @@ export const mockSilence = (partial: Partial<Silence> = {}): Silence => {
   };
 };
 
+export const MOCK_SILENCE_ID_EXISTING = 'f209e273-0e4e-434f-9f66-e72f092025a2';
+
+export const mockSilences = [
+  mockSilence({ id: MOCK_SILENCE_ID_EXISTING }),
+  mockSilence({
+    id: 'ce031625-61c7-47cd-9beb-8760bccf0ed7',
+    matchers: parseMatchers('foo!=bar'),
+    comment: 'Catch all',
+  }),
+  mockSilence({ id: '145884a8-ee20-4864-9f84-661305fb7d82', status: { state: SilenceState.Expired } }),
+];
+
 export const mockNotifiersState = (partial: Partial<NotifiersState> = {}): NotifiersState => {
   return {
     email: [
@@ -306,6 +346,20 @@ export const mockReceiversState = (partial: Partial<ReceiversState> = {}): Recei
   };
 };
 
+class MockDataSourceApi extends DataSourceApi {
+  constructor(instanceSettings: DataSourceInstanceSettings<DataSourceJsonData>) {
+    super(instanceSettings);
+  }
+
+  query(request: DataQueryRequest<DataQuery>): Promise<DataQueryResponse> | Observable<DataQueryResponse> {
+    throw new Error('Method not implemented.');
+  }
+  testDatasource(): Promise<TestDataSourceResponse> {
+    throw new Error('Method not implemented.');
+  }
+}
+
+// TODO This should be eventually moved to public/app/features/alerting/unified/testSetup/datasources.ts
 export class MockDataSourceSrv implements DataSourceSrv {
   datasources: Record<string, DataSourceApi> = {};
   // @ts-ignore
@@ -336,6 +390,7 @@ export class MockDataSourceSrv implements DataSourceSrv {
       if (dsSettings.isDefault) {
         this.defaultName = dsSettings.name;
       }
+      this.datasources[dsSettings.uid] = new MockDataSourceApi(dsSettings);
     }
   }
 
@@ -355,10 +410,7 @@ export class MockDataSourceSrv implements DataSourceSrv {
    * Get settings and plugin metadata by name or uid
    */
   getInstanceSettings(nameOrUid: string | null | undefined): DataSourceInstanceSettings | undefined {
-    return (
-      DatasourceSrv.prototype.getInstanceSettings.call(this, nameOrUid) ||
-      ({ meta: { info: { logos: {} } } } as unknown as DataSourceInstanceSettings)
-    );
+    return DatasourceSrv.prototype.getInstanceSettings.call(this, nameOrUid);
   }
 
   async loadDatasource(name: string): Promise<DataSourceApi<any, any>> {
@@ -506,6 +558,7 @@ export const somePromRules = (dataSourceName = 'Prometheus'): RuleNamespace[] =>
     groups: [mockPromRuleGroup({ name: 'group3', rules: [mockPromAlertingRule({ name: 'alert3' })] })],
   },
 ];
+
 export const someRulerRules: RulerRulesConfigDTO = {
   namespace1: [
     mockRulerRuleGroup({ name: 'group1', rules: [mockRulerAlertingRule({ alert: 'alert1' })] }),
@@ -513,6 +566,23 @@ export const someRulerRules: RulerRulesConfigDTO = {
   ],
   namespace2: [mockRulerRuleGroup({ name: 'group3', rules: [mockRulerAlertingRule({ alert: 'alert3' })] })],
 };
+
+export const getPotentiallyPausedRulerRules: (isPaused: boolean) => RulerRulesConfigDTO = (isPaused) => ({
+  namespacePaused: [
+    mockRulerRuleGroup({
+      name: 'groupPaused',
+      rules: [mockGrafanaRulerRule({ title: 'paused alert', is_paused: isPaused })],
+    }),
+  ],
+});
+
+export const pausedPromRules = (dataSourceName = 'Prometheus'): RuleNamespace[] => [
+  {
+    dataSourceName,
+    name: 'namespacePaused',
+    groups: [mockPromRuleGroup({ name: 'groupPaused', rules: [mockPromAlertingRule({ name: 'paused alert' })] })],
+  },
+];
 
 export const mockCombinedRule = (partial?: Partial<CombinedRule>): CombinedRule => ({
   name: 'mockRule',
@@ -556,32 +626,15 @@ export const mockFolder = (partial?: Partial<FolderDTO>): FolderDTO => {
   };
 };
 
-export const enableRBAC = () => {
-  jest.spyOn(contextSrv, 'accessControlEnabled').mockReturnValue(true);
-};
-
-export const disableRBAC = () => {
-  jest.spyOn(contextSrv, 'accessControlEnabled').mockReturnValue(false);
-};
-
 export const grantUserPermissions = (permissions: AccessControlAction[]) => {
   jest
     .spyOn(contextSrv, 'hasPermission')
     .mockImplementation((action) => permissions.includes(action as AccessControlAction));
 };
 
-export function mockDataSourcesStore(partial?: Partial<StoreState['dataSources']>) {
-  const defaultState = configureStore().getState();
-  const store = configureStore({
-    ...defaultState,
-    dataSources: {
-      ...defaultState.dataSources,
-      ...partial,
-    },
-  });
-
-  return store;
-}
+export const grantUserRole = (role: string) => {
+  jest.spyOn(contextSrv, 'hasRole').mockReturnValue(true);
+};
 
 export function mockUnifiedAlertingStore(unifiedAlerting?: Partial<StoreState['unifiedAlerting']>) {
   const defaultState = configureStore().getState();
@@ -623,15 +676,26 @@ export function mockCombinedRuleNamespace(namespace: Partial<CombinedRuleNamespa
     ...namespace,
   };
 }
+export function mockCombinedCloudRuleNamespace(
+  namespace: Partial<CombinedRuleNamespace>,
+  dataSourceName: string
+): CombinedRuleNamespace {
+  return {
+    name: 'Grafana',
+    groups: [],
+    rulesSource: mockDataSource({ name: dataSourceName, uid: 'Prometheus-1' }),
+    ...namespace,
+  };
+}
 
-export function getGrafanaRule(override?: Partial<CombinedRule>) {
+export function getGrafanaRule(override?: Partial<CombinedRule>, rulerOverride?: Partial<GrafanaRuleDefinition>) {
   return mockCombinedRule({
     namespace: {
       groups: [],
       name: 'Grafana',
       rulesSource: 'grafana',
     },
-    rulerRule: mockGrafanaRulerRule(),
+    rulerRule: mockGrafanaRulerRule(rulerOverride),
     ...override,
   });
 }
@@ -649,6 +713,73 @@ export function getCloudRule(override?: Partial<CombinedRule>) {
   });
 }
 
+export function mockPluginLinkExtension(extension: Partial<PluginExtensionLink>): PluginExtensionLink {
+  return {
+    type: PluginExtensionTypes.link,
+    id: 'plugin-id',
+    pluginId: 'grafana-test-app',
+    title: 'Test plugin link',
+    description: 'Test plugin link',
+    path: '/test',
+    ...extension,
+  };
+}
+
 export function mockAlertWithState(state: GrafanaAlertState, labels?: {}): Alert {
   return { activeAt: '', annotations: {}, labels: labels || {}, state: state, value: '' };
 }
+
+export function mockDashboardSearchItem(searchItem: Partial<DashboardSearchItem>) {
+  return {
+    title: '',
+    uid: '',
+    type: DashboardSearchItemType.DashDB,
+    url: '',
+    uri: '',
+    items: [],
+    tags: [],
+    slug: '',
+    isStarred: false,
+    ...searchItem,
+  };
+}
+
+export function mockDashboardDto(
+  dashboard: Partial<DashboardDTO['dashboard']>,
+  meta?: Partial<DashboardDTO['meta']>
+): DashboardDTO {
+  return {
+    dashboard: {
+      uid: 'dashboard-test',
+      title: 'Dashboard test',
+      schemaVersion: defaultDashboard.schemaVersion,
+      ...dashboard,
+    },
+    meta: { ...meta },
+  };
+}
+
+export const getMockPluginMeta: (id: string, name: string) => PluginMeta = (id, name) => {
+  return {
+    name,
+    id,
+    type: PluginType.app,
+    module: `plugins/${id}/module`,
+    baseUrl: `public/plugins/${id}`,
+    info: {
+      author: { name: 'Grafana Labs' },
+      description: name,
+      updated: '',
+      version: '',
+      links: [],
+      logos: {
+        small: '',
+        large: '',
+      },
+      screenshots: [],
+    },
+  };
+};
+
+export const labelsPluginMetaMock = getMockPluginMeta('grafana-labels-app', 'Grafana IRM Labels');
+export const onCallPluginMetaMock = getMockPluginMeta('grafana-oncall-app', 'Grafana OnCall');

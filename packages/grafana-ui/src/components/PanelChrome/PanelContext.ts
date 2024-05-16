@@ -6,17 +6,19 @@ import {
   DashboardCursorSync,
   AnnotationEventUIModel,
   ThresholdsConfig,
-  SplitOpen,
   CoreApp,
   DataFrame,
+  DataLinkPostProcessor,
 } from '@grafana/data';
 
 import { AdHocFilterItem } from '../Table/types';
 
-import { SeriesVisibilityChangeMode } from '.';
+import { SeriesVisibilityChangeMode } from './types';
 
 /** @alpha */
 export interface PanelContext {
+  /** Identifier for the events scope */
+  eventsScope: string;
   eventBus: EventBus;
 
   /** Dashboard panels sync */
@@ -67,12 +69,6 @@ export interface PanelContext {
    */
   onThresholdsChange?: (thresholds: ThresholdsConfig) => void;
 
-  /**
-   * onSplitOpen is used in Explore to open the split view. It can be used in panels which has intercations and used in Explore as well.
-   * For example TimeSeries panel.
-   */
-  onSplitOpen?: SplitOpen;
-
   /** For instance state that can be shared between panel & options UI  */
   instanceState?: any;
 
@@ -89,9 +85,16 @@ export interface PanelContext {
    * in a the Promise resolving to a false value.
    */
   onUpdateData?: (frames: DataFrame[]) => Promise<boolean>;
+
+  /**
+   * Optional supplier for internal data links. If not provided a link pointing to Explore will be generated.
+   * @internal
+   */
+  dataLinkPostProcessor?: DataLinkPostProcessor;
 }
 
 export const PanelContextRoot = React.createContext<PanelContext>({
+  eventsScope: 'global',
   eventBus: new EventBusSrv(),
 });
 

@@ -37,17 +37,17 @@ func TestCheck(t *testing.T) {
 		{"Test valid modfile", "go.mod", `
 		require (
 			cloud.google.com/go/storage v1.28.1 // @delivery
-			cuelang.org/go v0.5.0 // @as-code @backend-platform
+			cuelang.org/go v0.5.0 // @as-code @grafana/grafana-backend-group
 			github.com/Azure/azure-sdk-for-go v65.0.0+incompatible // indirect, @delivery
-			github.com/Masterminds/semver v1.5.0 // @delivery @backend-platform
+			github.com/Masterminds/semver v1.5.0 // @delivery @grafana/grafana-backend-group
 		)
 		`, []string{"go.mod"}, true, ""},
 		{"Test invalid modfile", "go.mod", `
 		require (
 			cloud.google.com/go/storage v1.28.1
-			cuelang.org/go v0.5.0 // @as-code @backend-platform
+			cuelang.org/go v0.5.0 // @as-code @grafana/grafana-backend-group
 			github.com/Azure/azure-sdk-for-go v65.0.0+incompatible // indirect, @delivery
-			github.com/Masterminds/semver v1.5.0 // @delivery @backend-platform
+			github.com/Masterminds/semver v1.5.0 // @delivery @grafana/grafana-backend-group
 		)
 		`, []string{"go.mod"}, false, "cloud.google.com/go/storage@v1.28.1\n"},
 	} {
@@ -69,16 +69,16 @@ func TestCheck(t *testing.T) {
 func TestModules(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := log.New(buf, "", 0)
-	filesystem := fstest.MapFS{"go.txd": &fstest.MapFile{Data: []byte(`
+	filesystem := fstest.MapFS{"go.mod": &fstest.MapFile{Data: []byte(`
 	require (
 		cloud.google.com/go/storage v1.28.1
-		cuelang.org/go v0.5.0 // @as-code @backend-platform
+		cuelang.org/go v0.5.0 // @as-code @grafana/grafana-backend-group
 		github.com/Azure/azure-sdk-for-go v65.0.0+incompatible // indirect, @delivery
-		github.com/Masterminds/semver v1.5.0 // @delivery @backend-platform
+		github.com/Masterminds/semver v1.5.0 // @delivery @grafana/grafana-backend-group
 	)
 	`)}}
 
-	err := modules(filesystem, logger, []string{"-m", "go.txd"}) // NOTE: pass various flags, these are cmd line arguments
+	err := modules(filesystem, logger, []string{"go.mod"})
 	if err != nil {
 		t.Error(err, buf.String())
 	}
@@ -87,16 +87,17 @@ func TestModules(t *testing.T) {
 
 	// Expected results
 	expectedModules := []string{
-		"cloud.google.com/go/storage v1.28.1",
-		"cuelang.org/go v0.5.0",
-		"github.com/Azure/azure-sdk-for-go v65.0.0+incompatible",
-		"github.com/Masterminds/semver v1.5.0",
+		"cloud.google.com/go/storage@v1.28.1",
+		"cuelang.org/go@v0.5.0",
+		"github.com/Masterminds/semver@v1.5.0",
+		"",
 	}
 
 	expectedResults := strings.Join(expectedModules, "\n")
 
 	// Compare logs to expected results
 	if logs != expectedResults {
-		t.Error(err)
+		t.Error(logs)
+		t.Error(expectedResults)
 	}
 }

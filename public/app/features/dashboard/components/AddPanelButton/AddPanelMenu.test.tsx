@@ -4,6 +4,7 @@ import React from 'react';
 import { PluginType } from '@grafana/data';
 import { locationService, reportInteraction } from '@grafana/runtime';
 import { defaultDashboard } from '@grafana/schema';
+import config from 'app/core/config';
 import { createDashboardModelFixture } from 'app/features/dashboard/state/__fixtures__/dashboardFixtures';
 import {
   onCreateNewPanel,
@@ -26,7 +27,6 @@ jest.mock('@grafana/runtime', () => ({
     partial: jest.fn(),
   },
   reportInteraction: jest.fn(),
-  config: {},
 }));
 
 jest.mock('app/features/dashboard/utils/dashboard', () => ({
@@ -46,6 +46,7 @@ function setup() {
 }
 
 beforeEach(() => {
+  config.featureToggles = { vizAndWidgetSplit: false };
   jest.clearAllMocks();
 });
 
@@ -66,7 +67,7 @@ it('renders with all buttons enabled except paste a panel', () => {
   expect(screen.getByText('visualization', { exact: false })).not.toBeDisabled();
   expect(screen.getByText('row', { exact: false })).not.toBeDisabled();
   expect(screen.getByText('library', { exact: false })).not.toBeDisabled();
-  expect(screen.getByText('paste panel', { exact: false })).toBeDisabled();
+  expect(screen.getByRole('menuitem', { name: 'Paste panel' })).toBeDisabled();
 });
 
 it('renders with all buttons enabled', () => {
@@ -135,4 +136,16 @@ it('adds a library panel when clicked on menu item Import from library', () => {
   expect(reportInteraction).toHaveBeenCalledWith('dashboards_toolbar_add_clicked', { item: 'import_from_library' });
   expect(locationService.partial).not.toHaveBeenCalled();
   expect(onAddLibraryPanel).toHaveBeenCalled();
+});
+
+it('renders menu list without Widget button when feature flag is disabled', () => {
+  setup();
+  expect(screen.queryByText('Widget')).not.toBeInTheDocument();
+});
+
+it('renders menu list with Widget button when feature flag is enabled', () => {
+  config.featureToggles.vizAndWidgetSplit = true;
+  setup();
+
+  expect(screen.getByText('Widget')).toBeInTheDocument();
 });

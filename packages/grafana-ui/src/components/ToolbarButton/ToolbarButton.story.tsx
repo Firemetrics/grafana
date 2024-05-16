@@ -2,9 +2,8 @@ import { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
 
 import { DashboardStoryCanvas } from '../../utils/storybook/DashboardStoryCanvas';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 import { ButtonGroup } from '../Button';
-import { HorizontalGroup, VerticalGroup } from '../Layout/Layout';
+import { Stack } from '../Layout/Stack/Stack';
 
 import { ToolbarButton, ToolbarButtonVariant } from './ToolbarButton';
 import mdx from './ToolbarButton.mdx';
@@ -13,7 +12,6 @@ import { ToolbarButtonRow } from './ToolbarButtonRow';
 const meta: Meta<typeof ToolbarButton> = {
   title: 'Buttons/ToolbarButton',
   component: ToolbarButton,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -96,7 +94,7 @@ export const Examples: StoryFn<typeof ToolbarButton> = (args) => {
 
   return (
     <DashboardStoryCanvas>
-      <VerticalGroup>
+      <Stack direction="column" gap={1.5}>
         Button states
         <ToolbarButtonRow>
           <ToolbarButton variant="canvas">Just text</ToolbarButton>
@@ -130,10 +128,10 @@ export const Examples: StoryFn<typeof ToolbarButton> = (args) => {
         <br />
         Wrapped in noSpacing ButtonGroup
         <ButtonGroup>
-          <ToolbarButton variant="canvas" icon="clock-nine" tooltip="Time picker">
+          <ToolbarButton variant="active" icon="clock-nine" tooltip="Time picker">
             2020-10-02
           </ToolbarButton>
-          <ToolbarButton variant="canvas" icon="search-minus" />
+          <ToolbarButton variant="active" icon="search-minus" />
         </ButtonGroup>
         <br />
         <ButtonGroup>
@@ -142,7 +140,7 @@ export const Examples: StoryFn<typeof ToolbarButton> = (args) => {
         </ButtonGroup>
         <br />
         Inside button group
-        <HorizontalGroup>
+        <Stack>
           <ButtonGroup>
             <ToolbarButton variant="primary" icon="sync">
               Run query
@@ -155,8 +153,8 @@ export const Examples: StoryFn<typeof ToolbarButton> = (args) => {
             </ToolbarButton>
             <ToolbarButton isOpen={false} narrow variant="destructive" />
           </ButtonGroup>
-        </HorizontalGroup>
-      </VerticalGroup>
+        </Stack>
+      </Stack>
     </DashboardStoryCanvas>
   );
 };

@@ -1,10 +1,9 @@
 import { reduce } from 'lodash';
 
-import { escapeRegex, ScopedVars } from '@grafana/data/src';
+import { escapeRegex, ScopedVars } from '@grafana/data';
+import { TemplateSrv } from '@grafana/runtime';
 
-import { TemplateSrv } from '../../../features/templating/template_srv';
-
-import { InfluxQueryTag, MetadataQueryType } from './types';
+import { DEFAULT_POLICY, InfluxQueryTag, MetadataQueryType } from './types';
 
 export const buildMetadataQuery = (params: {
   type: MetadataQueryType;
@@ -42,7 +41,7 @@ export const buildMetadataQuery = (params: {
       if (measurement && !measurement.match(/^\/.*\/|^$/)) {
         measurement = '"' + measurement + '"';
 
-        if (retentionPolicy && retentionPolicy !== 'default') {
+        if (retentionPolicy && retentionPolicy !== DEFAULT_POLICY) {
           retentionPolicy = '"' + retentionPolicy + '"';
           measurement = retentionPolicy + '.' + measurement;
         }
@@ -70,7 +69,7 @@ export const buildMetadataQuery = (params: {
       measurement = '"' + measurement + '"';
     }
 
-    if (retentionPolicy && retentionPolicy !== 'default') {
+    if (retentionPolicy && retentionPolicy !== DEFAULT_POLICY) {
       retentionPolicy = '"' + retentionPolicy + '"';
       measurement = retentionPolicy + '.' + measurement;
     }

@@ -1,17 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAsync, useDebounce } from 'react-use';
 
-import { isFetchError } from '@grafana/runtime';
+import { FetchError, isFetchError } from '@grafana/runtime';
 import { Button, Field, Input, Modal } from '@grafana/ui';
-import { FolderPicker } from 'app/core/components/Select/FolderPicker';
+import { OldFolderPicker } from 'app/core/components/Select/OldFolderPicker';
 import { t, Trans } from 'app/core/internationalization';
 
 import { PanelModel } from '../../../dashboard/state';
 import { getLibraryPanelByName } from '../../state/api';
+import { LibraryElementDTO } from '../../types';
 import { usePanelSave } from '../../utils/usePanelSave';
 
 interface AddLibraryPanelContentsProps {
-  onDismiss: () => void;
+  onDismiss?: () => void;
   panel: PanelModel;
   initialFolderUid?: string;
 }
@@ -26,14 +27,18 @@ export const AddLibraryPanelContents = ({ panel, initialFolderUid, onDismiss }: 
   useDebounce(() => setDebouncedPanelName(panelName), 350, [panelName]);
 
   const { saveLibraryPanel } = usePanelSave();
+
   const onCreate = useCallback(() => {
     panel.libraryPanel = { uid: '', name: panelName };
-    saveLibraryPanel(panel, folderUid!).then((res) => {
-      if (!(res instanceof Error)) {
-        onDismiss();
+    saveLibraryPanel(panel, folderUid!).then((res: LibraryElementDTO | FetchError) => {
+      if (!isFetchError(res)) {
+        onDismiss?.();
+      } else {
+        panel.libraryPanel = undefined;
       }
     });
   }, [panel, panelName, folderUid, onDismiss, saveLibraryPanel]);
+
   const isValidName = useAsync(async () => {
     try {
       return !(await getLibraryPanelByName(panelName)).some((lp) => lp.folderUid === folderUid);
@@ -47,6 +52,7 @@ export const AddLibraryPanelContents = ({ panel, initialFolderUid, onDismiss }: 
     }
   }, [debouncedPanelName, folderUid]);
 
+  console.log('isValidName:', isValidName);
   const invalidInput =
     !isValidName?.value && isValidName.value !== undefined && panelName === debouncedPanelName && !waiting;
 
@@ -71,7 +77,7 @@ export const AddLibraryPanelContents = ({ panel, initialFolderUid, onDismiss }: 
           'Library panel permissions are derived from the folder permissions'
         )}
       >
-        <FolderPicker
+        <OldFolderPicker
           onChange={({ uid }) => setFolderUid(uid)}
           initialFolderUid={initialFolderUid}
           inputId="share-panel-library-panel-folder-picker"

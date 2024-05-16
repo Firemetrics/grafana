@@ -1,15 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import React from 'react';
-import { match } from 'react-router-dom';
-import { TestProvider } from 'test/helpers/TestProvider';
+import { Route, Router } from 'react-router-dom';
+import { render } from 'test/test-utils';
 
-import { createTheme } from '@grafana/data';
-import { getRouteComponentProps } from 'app/core/navigation/__mocks__/routeProps';
-import { User } from 'app/core/services/context_srv';
+import { locationService } from '@grafana/runtime';
 
-import { OrgRole, Team, TeamMember } from '../../types';
-
-import { Props, TeamPages } from './TeamPages';
+import TeamPages from './TeamPages';
 import { getMockTeam } from './__mocks__/teamMocks';
 
 jest.mock('app/core/components/Select/UserPicker', () => {
@@ -18,9 +14,8 @@ jest.mock('app/core/components/Select/UserPicker', () => {
 
 jest.mock('app/core/services/context_srv', () => ({
   contextSrv: {
-    accessControlEnabled: () => false,
-    hasPermissionInMetadata: () => false,
-    hasAccessInMetadata: () => true,
+    accessControlEnabled: () => true,
+    hasPermissionInMetadata: () => true,
     user: {},
   },
 }));
@@ -28,15 +23,16 @@ jest.mock('app/core/services/context_srv', () => ({
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
   getBackendSrv: () => ({
-    get: jest.fn().mockResolvedValue([{ userId: 1, login: 'Test' }]),
+    get: jest.fn().mockResolvedValue(getMockTeam()),
   }),
   config: {
+    ...jest.requireActual('@grafana/runtime').config,
     licenseInfo: {
       enabledFeatures: { teamsync: true },
       stateInfo: '',
       licenseUrl: '',
     },
-    featureToggles: { accesscontrol: false },
+    featureToggles: { accesscontrol: true },
     bootData: { navTree: [], user: {} },
     buildInfo: {
       edition: 'Open Source',
@@ -63,58 +59,24 @@ jest.mock('./TeamGroupSync', () => {
   return () => <div>Team group sync</div>;
 });
 
-const setup = (propOverrides?: object) => {
-  const props: Props = {
-    ...getRouteComponentProps({
-      match: {
-        params: {
-          id: '1',
-          page: null,
-        },
-      } as unknown as match,
-    }),
-    pageNav: { text: 'Cool team ' },
-    teamId: 1,
-    loadTeam: jest.fn(),
-    loadTeamMembers: jest.fn(),
-    pageName: 'members',
-    team: {} as Team,
-    members: [] as TeamMember[],
-    editorsCanAdmin: false,
-    theme: createTheme(),
-    signedInUser: {
-      id: 1,
-      isGrafanaAdmin: false,
-      orgRole: OrgRole.Viewer,
-    } as User,
-  };
-
-  Object.assign(props, propOverrides);
+const setup = (propOverrides: { teamId?: number; pageName?: string } = {}) => {
+  const pageName = propOverrides.pageName ?? 'members';
+  const teamId = propOverrides.teamId ?? 1;
+  locationService.push({ pathname: `/org/teams/edit/${teamId}/${pageName}` });
 
   render(
-    <TestProvider>
-      <TeamPages {...props} />
-    </TestProvider>
+    <Router history={locationService.getHistory()}>
+      <Route path="/org/teams/edit/:id/:page?">
+        <TeamPages />
+      </Route>
+    </Router>
   );
 };
 
 describe('TeamPages', () => {
-  it('should render member page if team not empty', async () => {
-    setup({
-      team: getMockTeam(),
-    });
-    expect(await screen.findByRole('button', { name: 'Add member' })).toBeInTheDocument();
-  });
-
   it('should render settings and preferences page', async () => {
     setup({
-      team: getMockTeam(),
       pageName: 'settings',
-      preferences: {
-        homeDashboardUID: 'home-dashboard',
-        theme: 'Default',
-        timezone: 'Default',
-      },
     });
 
     expect(await screen.findByText('Team settings')).toBeInTheDocument();
@@ -122,32 +84,9 @@ describe('TeamPages', () => {
 
   it('should render group sync page', async () => {
     setup({
-      team: getMockTeam(),
       pageName: 'groupsync',
     });
 
     expect(await screen.findByText('Team group sync')).toBeInTheDocument();
-  });
-
-  describe('when feature toggle editorsCanAdmin is turned on', () => {
-    it('should render settings page if user is team admin', async () => {
-      setup({
-        team: getMockTeam(),
-        pageName: 'settings',
-        preferences: {
-          homeDashboardUID: 'home-dashboard',
-          theme: 'Default',
-          timezone: 'Default',
-        },
-        editorsCanAdmin: true,
-        signedInUser: {
-          id: 1,
-          isGrafanaAdmin: false,
-          orgRole: OrgRole.Admin,
-        } as User,
-      });
-
-      expect(await screen.findByText('Team settings')).toBeInTheDocument();
-    });
   });
 });

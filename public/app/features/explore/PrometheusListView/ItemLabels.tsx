@@ -2,9 +2,8 @@ import { css } from '@emotion/css';
 import React from 'react';
 
 import { Field, GrafanaTheme2 } from '@grafana/data/';
+import { InstantQueryRefIdIndex } from '@grafana/prometheus';
 import { useStyles2 } from '@grafana/ui/';
-
-import { InstantQueryRefIdIndex } from '../../../plugins/datasource/prometheus/datasource';
 
 import { rawListItemColumnWidth } from './RawListItem';
 
@@ -32,7 +31,7 @@ export const formatValueName = (name: string): string => {
 };
 
 export const ItemLabels = ({ valueLabels, expanded }: { valueLabels: Field[]; expanded: boolean }) => {
-  const styles = useStyles2((theme) => getItemLabelsStyles(theme, expanded));
+  const styles = useStyles2(getItemLabelsStyles, expanded);
 
   return (
     <div className={styles.itemLabelsWrap}>

@@ -8,6 +8,10 @@ keywords:
   - enterprise
   - api
   - reporting
+labels:
+  products:
+    - enterprise
+    - oss
 title: Reporting API
 ---
 
@@ -237,7 +241,7 @@ Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
 				"to": "2022-09-02T17:00:00+02:00"
 			},
 			"reportVariables": {
-				"varibale1": "Value1"
+				"variable1": "Value1"
 			}
 		}
 	],
@@ -350,7 +354,7 @@ Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
 				"to": "2022-09-02T17:00:00+02:00"
 			},
 			"reportVariables": {
-				"varibale1": "Value1"
+				"variable1": "Value1"
 			}
 		}
 	],
@@ -643,7 +647,7 @@ Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
 				"to": "2022-09-02T17:00:00+02:00"
 			},
 			"reportVariables": {
-				"varibale1": "Value1"
+				"variable1": "Value1"
 			}
 		}
 	],

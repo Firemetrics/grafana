@@ -3,15 +3,22 @@
 import './global-jquery-shim';
 
 import angular from 'angular';
+import { TextEncoder, TextDecoder } from 'util';
 
 import { EventBusSrv } from '@grafana/data';
 import { GrafanaBootConfig } from '@grafana/runtime';
+import { initIconCache } from 'app/core/icons/iconBundle';
+
 import 'blob-polyfill';
 import 'mutationobserver-shim';
 import './mocks/workers';
 
 import '../vendor/flot/jquery.flot';
 import '../vendor/flot/jquery.flot.time';
+
+// icon cache needs to be initialized for test to prevent
+// libraries such as msw from throwing "unhandled resource"-errors
+initIconCache();
 
 const testAppEvents = new EventBusSrv();
 const global = window as any;
@@ -27,19 +34,15 @@ global.grafanaBootData = {
   navTree: [],
 };
 
-// https://jestjs.io/docs/manual-mocks#mocking-methods-which-are-not-implemented-in-jsdom
-Object.defineProperty(global, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
+window.matchMedia = (query) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: jest.fn(), // Deprecated
+  removeListener: jest.fn(), // Deprecated
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  dispatchEvent: jest.fn(),
 });
 
 angular.module('grafana', ['ngRoute']);
@@ -62,6 +65,9 @@ const mockIntersectionObserver = jest
   }));
 global.IntersectionObserver = mockIntersectionObserver;
 
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
 jest.mock('../app/core/core', () => ({
   ...jest.requireActual('../app/core/core'),
   appEvents: testAppEvents,
@@ -76,3 +82,34 @@ const throwUnhandledRejections = () => {
 };
 
 throwUnhandledRejections();
+
+// Used by useMeasure
+global.ResizeObserver = class ResizeObserver {
+  //callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    setTimeout(() => {
+      callback(
+        [
+          {
+            contentRect: {
+              x: 1,
+              y: 2,
+              width: 500,
+              height: 500,
+              top: 100,
+              bottom: 0,
+              left: 100,
+              right: 0,
+            },
+            target: {},
+          } as ResizeObserverEntry,
+        ],
+        this
+      );
+    });
+  }
+  observe() {}
+  disconnect() {}
+  unobserve() {}
+};

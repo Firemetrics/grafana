@@ -1,28 +1,28 @@
-import { css, cx } from '@emotion/css';
 import { take } from 'lodash';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import {
+  DataLinkBuiltInVars,
   DateTime,
-  GrafanaTheme2,
   InterpolateFunction,
   PanelProps,
   textUtil,
   UrlQueryValue,
   urlUtil,
 } from '@grafana/data';
-import { CustomScrollbar, stylesFactory, useStyles2 } from '@grafana/ui';
-import { Icon, IconProps } from '@grafana/ui/src/components/Icon/Icon';
-import { getFocusStyles } from '@grafana/ui/src/themes/mixins';
+import { CustomScrollbar, useStyles2, IconButton } from '@grafana/ui';
+import { updateNavIndex } from 'app/core/actions';
 import { getConfig } from 'app/core/config';
-import { setStarred } from 'app/core/reducers/navBarTree';
+import { appEvents } from 'app/core/core';
+import { useBusEvent } from 'app/core/hooks/useBusEvent';
+import { ID_PREFIX, setStarred } from 'app/core/reducers/navBarTree';
+import { removeNavIndex } from 'app/core/reducers/navModel';
 import { getBackendSrv } from 'app/core/services/backend_srv';
 import impressionSrv from 'app/core/services/impression_srv';
 import { getDashboardSrv } from 'app/features/dashboard/services/DashboardSrv';
-import { getTimeSrv } from 'app/features/dashboard/services/TimeSrv';
 import { DashboardSearchItem } from 'app/features/search/types';
-import { getVariablesUrlParams } from 'app/features/variables/getAllVariableValuesForUrl';
-import { useDispatch } from 'app/types';
+import { VariablesChanged } from 'app/features/variables/types';
+import { useDispatch, useSelector } from 'app/types';
 
 import { Options } from './panelcfg.gen';
 import { getStyles } from './styles';
@@ -37,6 +37,7 @@ interface DashboardGroup {
 
 async function fetchDashboards(options: Options, replaceVars: InterpolateFunction) {
   let starredDashboards: Promise<DashboardSearchItem[]> = Promise.resolve([]);
+
   if (options.showStarred) {
     const params = { limit: options.maxItems, starred: 'true' };
     starredDashboards = getBackendSrv().search(params);
@@ -52,10 +53,11 @@ async function fetchDashboards(options: Options, replaceVars: InterpolateFunctio
 
   let searchedDashboards: Promise<DashboardSearchItem[]> = Promise.resolve([]);
   if (options.showSearch) {
+    const uid = options.folderUID === '' ? 'general' : options.folderUID;
     const params = {
       limit: options.maxItems,
       query: replaceVars(options.query, {}, 'text'),
-      folderIds: options.folderId,
+      folderUIDs: uid,
       tag: options.tags.map((tag: string) => replaceVars(tag, {}, 'text')),
       type: 'dash-db',
     };
@@ -102,6 +104,8 @@ async function fetchDashboards(options: Options, replaceVars: InterpolateFunctio
 export function DashList(props: PanelProps<Options>) {
   const [dashboards, setDashboards] = useState(new Map<string, Dashboard>());
   const dispatch = useDispatch();
+  const navIndex = useSelector((state) => state.navIndex);
+
   useEffect(() => {
     fetchDashboards(props.options, props.replaceVariables).then((dashes) => {
       setDashboards(dashes);
@@ -118,6 +122,23 @@ export function DashList(props: PanelProps<Options>) {
     updatedDashboards.set(dash?.uid ?? '', { ...dash, isStarred });
     setDashboards(updatedDashboards);
     dispatch(setStarred({ id: uid ?? '', title, url, isStarred }));
+
+    const starredNavItem = navIndex['starred'];
+    if (isStarred) {
+      starredNavItem.children?.push({
+        id: ID_PREFIX + uid,
+        text: title,
+        url: url ?? '',
+        parentItem: starredNavItem,
+      });
+    } else {
+      dispatch(removeNavIndex(ID_PREFIX + uid));
+      const indexToRemove = starredNavItem.children?.findIndex((element) => element.id === ID_PREFIX + uid);
+      if (indexToRemove) {
+        starredNavItem.children?.splice(indexToRemove, 1);
+      }
+    }
+    dispatch(updateNavIndex(starredNavItem));
   };
 
   const [starredDashboards, recentDashboards, searchedDashboards] = useMemo(() => {
@@ -129,7 +150,7 @@ export function DashList(props: PanelProps<Options>) {
     ];
   }, [dashboards]);
 
-  const { showStarred, showRecentlyViewed, showHeadings, showSearch } = props.options;
+  const { showStarred, showRecentlyViewed, showHeadings, showFolderNames, showSearch } = props.options;
 
   const dashboardGroups: DashboardGroup[] = [
     {
@@ -150,27 +171,14 @@ export function DashList(props: PanelProps<Options>) {
   ];
 
   const css = useStyles2(getStyles);
+  const urlParams = useDashListUrlParams(props);
 
   const renderList = (dashboards: Dashboard[]) => (
     <ul>
       {dashboards.map((dash) => {
         let url = dash.url;
-        let params: { [key: string]: string | DateTime | UrlQueryValue } = {};
 
-        if (props.options.keepTime) {
-          const range = getTimeSrv().timeRangeForUrl();
-          params['from'] = range.from;
-          params['to'] = range.to;
-        }
-
-        if (props.options.includeVars) {
-          params = {
-            ...params,
-            ...getVariablesUrlParams(),
-          };
-        }
-
-        url = urlUtil.appendQueryToUrl(url, urlUtil.toUrlParams(params));
+        url = urlUtil.appendQueryToUrl(url, urlParams);
         url = getConfig().disableSanitizeHtml ? url : textUtil.sanitizeUrl(url);
 
         return (
@@ -180,14 +188,12 @@ export function DashList(props: PanelProps<Options>) {
                 <a className={css.dashlistTitle} href={url}>
                   {dash.title}
                 </a>
-                {dash.folderTitle && <div className={css.dashlistFolder}>{dash.folderTitle}</div>}
+                {showFolderNames && dash.folderTitle && <div className={css.dashlistFolder}>{dash.folderTitle}</div>}
               </div>
-              <IconToggle
-                aria-label={`Star dashboard "${dash.title}".`}
-                className={css.dashlistStar}
-                enabled={{ name: 'favorite', type: 'mono' }}
-                disabled={{ name: 'star', type: 'default' }}
-                checked={dash.isStarred}
+              <IconButton
+                tooltip={dash.isStarred ? `Unmark "${dash.title}" as favorite` : `Mark "${dash.title}" as favorite`}
+                name={dash.isStarred ? 'favorite' : 'star'}
+                iconType={dash.isStarred ? 'mono' : 'default'}
                 onClick={(e) => toggleDashboardStar(e, dash)}
               />
             </div>
@@ -212,67 +218,21 @@ export function DashList(props: PanelProps<Options>) {
   );
 }
 
-interface IconToggleProps extends Partial<IconProps> {
-  enabled: IconProps;
-  disabled: IconProps;
-  checked: boolean;
+function useDashListUrlParams(props: PanelProps<Options>) {
+  // We don't care about the payload just want to get re-render when this event is published
+  useBusEvent(appEvents, VariablesChanged);
+
+  let params: { [key: string]: string | DateTime | UrlQueryValue } = {};
+
+  if (props.options.keepTime) {
+    params[`\$${DataLinkBuiltInVars.keepTime}`] = true;
+  }
+
+  if (props.options.includeVars) {
+    params[`\$${DataLinkBuiltInVars.includeVars}`] = true;
+  }
+
+  const urlParms = props.replaceVariables(urlUtil.toUrlParams(params));
+
+  return urlParms;
 }
-
-function IconToggle({
-  enabled,
-  disabled,
-  checked,
-  onClick,
-  className,
-  'aria-label': ariaLabel,
-  ...otherProps
-}: IconToggleProps) {
-  const toggleCheckbox = useCallback(
-    (e: React.MouseEvent<HTMLInputElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      onClick?.(e);
-    },
-    [onClick]
-  );
-
-  const iconPropsOverride = checked ? enabled : disabled;
-  const iconProps = { ...otherProps, ...iconPropsOverride };
-  const styles = useStyles2(getCheckboxStyles);
-  return (
-    <label className={styles.wrapper}>
-      <input
-        type="checkbox"
-        defaultChecked={checked}
-        onClick={toggleCheckbox}
-        className={styles.checkBox}
-        aria-label={ariaLabel}
-      />
-      <Icon className={cx(styles.icon, className)} {...iconProps} />
-    </label>
-  );
-}
-
-export const getCheckboxStyles = stylesFactory((theme: GrafanaTheme2) => {
-  return {
-    wrapper: css({
-      display: 'flex',
-      alignSelf: 'center',
-      cursor: 'pointer',
-      zIndex: 1,
-    }),
-    checkBox: css({
-      appearance: 'none',
-      '&:focus-visible + *': {
-        ...getFocusStyles(theme),
-        borderRadius: theme.shape.borderRadius(1),
-      },
-    }),
-    icon: css({
-      marginBottom: 0,
-      verticalAlign: 'baseline',
-      display: 'flex',
-    }),
-  };
-});

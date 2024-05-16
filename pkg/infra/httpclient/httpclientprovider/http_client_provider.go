@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"time"
 
+	awssdk "github.com/grafana/grafana-aws-sdk/pkg/sigv4"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/mwitkow/go-conntrack"
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/infra/metrics/metricutil"
-	"github.com/grafana/grafana/pkg/infra/proxy"
 	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/services/validations"
 	"github.com/grafana/grafana/pkg/setting"
@@ -28,16 +28,21 @@ func New(cfg *setting.Cfg, validator validations.PluginRequestValidator, tracer 
 		SetUserAgentMiddleware(cfg.DataProxyUserAgent),
 		sdkhttpclient.BasicAuthenticationMiddleware(),
 		sdkhttpclient.CustomHeadersMiddleware(),
-		ResponseLimitMiddleware(cfg.ResponseLimit),
+		sdkhttpclient.ResponseLimitMiddleware(cfg.ResponseLimit),
 		RedirectLimitMiddleware(validator),
-	}
-
-	if cfg.SigV4AuthEnabled {
-		middlewares = append(middlewares, SigV4Middleware(cfg.SigV4VerboseLogging))
 	}
 
 	if httpLoggingEnabled(cfg.PluginSettings) {
 		middlewares = append(middlewares, HTTPLoggerMiddleware(cfg.PluginSettings))
+	}
+
+	if cfg.IPRangeACEnabled {
+		middlewares = append(middlewares, GrafanaRequestIDHeaderMiddleware(cfg, logger))
+	}
+
+	// SigV4 signing should be performed after all headers are added
+	if cfg.SigV4AuthEnabled {
+		middlewares = append(middlewares, awssdk.SigV4Middleware(cfg.SigV4VerboseLogging))
 	}
 
 	setDefaultTimeoutOptions(cfg)
@@ -52,13 +57,6 @@ func New(cfg *setting.Cfg, validator validations.PluginRequestValidator, tracer 
 			datasourceLabelName, err := metricutil.SanitizeLabelName(datasourceName)
 			if err != nil {
 				return
-			}
-
-			if cfg.SecureSocksDSProxy.Enabled && proxy.SecureSocksProxyEnabledOnDS(opts) {
-				err = proxy.NewSecureSocksHTTPProxy(&cfg.SecureSocksDSProxy, transport)
-				if err != nil {
-					logger.Error("Failed to enable secure socks proxy", "error", err.Error(), "datasource", datasourceName)
-				}
 			}
 
 			newConntrackRoundTripper(datasourceLabelName, transport)

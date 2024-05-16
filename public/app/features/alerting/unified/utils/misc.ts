@@ -1,7 +1,12 @@
 import { sortBy } from 'lodash';
 
-import { UrlQueryMap, Labels, DataSourceInstanceSettings, DataSourceJsonData } from '@grafana/data';
-import { alertInstanceKey } from 'app/features/alerting/unified/utils/rules';
+import { Labels, UrlQueryMap } from '@grafana/data';
+import { GrafanaEdition } from '@grafana/data/src/types/config';
+import { config, isFetchError } from '@grafana/runtime';
+import { DataSourceRef } from '@grafana/schema';
+import { contextSrv } from 'app/core/services/context_srv';
+import { escapePathSeparators } from 'app/features/alerting/unified/utils/rule-id';
+import { alertInstanceKey, isGrafanaRulerRule } from 'app/features/alerting/unified/utils/rules';
 import { SortOrder } from 'app/plugins/panel/alertlist/types';
 import { Alert, CombinedRule, FilterState, RulesSource, SilenceFilterState } from 'app/types/unified-alerting';
 import {
@@ -9,8 +14,6 @@ import {
   PromAlertingRuleState,
   mapStateWithReasonToBaseState,
 } from 'app/types/unified-alerting-dto';
-
-import { FolderDTO } from '../../../../types';
 
 import { ALERTMANAGER_NAME_QUERY_KEY } from './constants';
 import { getRulesSourceName, isCloudRulesSource } from './datasource';
@@ -27,11 +30,13 @@ export function createViewLink(ruleSource: RulesSource, rule: CombinedRule, retu
   return createUrl(`/alerting/${paramSource}/${paramId}/view`, { returnTo });
 }
 
-export function createExploreLink(dataSourceName: string, query: string) {
+export function createExploreLink(datasource: DataSourceRef, query: string) {
+  const { uid, type } = datasource;
+
   return createUrl(`/explore`, {
     left: JSON.stringify({
-      datasource: dataSourceName,
-      queries: [{ refId: 'A', datasource: dataSourceName, expr: query }],
+      datasource: datasource.uid,
+      queries: [{ refId: 'A', datasource: { uid, type }, expr: query }],
       range: { from: 'now-1h', to: 'now' },
     }),
   });
@@ -50,12 +55,16 @@ export function createMuteTimingLink(muteTimingName: string, alertManagerSourceN
   });
 }
 
-export function createShareLink(ruleSource: RulesSource, rule: CombinedRule): string {
+export function createShareLink(ruleSource: RulesSource, rule: CombinedRule): string | undefined {
   if (isCloudRulesSource(ruleSource)) {
-    return createAbsoluteUrl(`/alerting/${encodeURIComponent(ruleSource.name)}/${encodeURIComponent(rule.name)}/find`);
+    return createAbsoluteUrl(
+      `/alerting/${encodeURIComponent(ruleSource.name)}/${encodeURIComponent(escapePathSeparators(rule.name))}/find`
+    );
+  } else if (isGrafanaRulerRule(rule.rulerRule)) {
+    return createUrl(`/alerting/grafana/${rule.rulerRule.grafana_alert.uid}/view`);
   }
 
-  return window.location.href.split('?')[0];
+  return;
 }
 
 export function arrayToRecord(items: Array<{ key: string; value: string }>): Record<string, string> {
@@ -97,18 +106,16 @@ export function makeAMLink(path: string, alertManagerName?: string, options?: UR
   const search = new URLSearchParams(options);
 
   if (alertManagerName) {
-    search.append(ALERTMANAGER_NAME_QUERY_KEY, alertManagerName);
+    search.set(ALERTMANAGER_NAME_QUERY_KEY, alertManagerName);
   }
   return `${path}?${search.toString()}`;
 }
 
-export function makeRuleBasedSilenceLink(alertManagerSourceName: string, rule: CombinedRule) {
-  const labels: Labels = {
-    alertname: rule.name,
-    ...rule.labels,
-  };
+export const escapeQuotes = (input: string) => input.replace(/\"/g, '\\"');
 
-  return makeLabelBasedSilenceLink(alertManagerSourceName, labels);
+export function wrapWithQuotes(input: string) {
+  const alreadyWrapped = input.startsWith('"') && input.endsWith('"');
+  return alreadyWrapped ? escapeQuotes(input) : `"${escapeQuotes(input)}"`;
 }
 
 export function makeLabelBasedSilenceLink(alertManagerSourceName: string, labels: Labels) {
@@ -121,16 +128,20 @@ export function makeLabelBasedSilenceLink(alertManagerSourceName: string, labels
   return createUrl('/alerting/silence/new', silenceUrlParams);
 }
 
-export function makeDataSourceLink<T extends DataSourceJsonData>(dataSource: DataSourceInstanceSettings<T>) {
-  return createUrl(`/datasources/edit/${dataSource.uid}`);
+export function makeDataSourceLink(uid: string) {
+  return createUrl(`/datasources/edit/${uid}`);
 }
 
 export function makeFolderLink(folderUID: string): string {
   return createUrl(`/dashboards/f/${folderUID}`);
 }
 
-export function makeFolderSettingsLink(folder: FolderDTO): string {
-  return createUrl(`/dashboards/f/${folder.uid}/${folder.title}/settings`);
+export function makeFolderAlertsLink(folderUID: string, title: string): string {
+  return createUrl(`/dashboards/f/${folderUID}/${title}/alerting`);
+}
+
+export function makeFolderSettingsLink(uid: string): string {
+  return createUrl(`/dashboards/f/${uid}/settings`);
 }
 
 export function makeDashboardLink(dashboardUID: string): string {
@@ -138,7 +149,8 @@ export function makeDashboardLink(dashboardUID: string): string {
 }
 
 export function makePanelLink(dashboardUID: string, panelId: string): string {
-  return createUrl(`/d/${encodeURIComponent(dashboardUID)}`, { viewPanel: panelId });
+  const panelParams = new URLSearchParams({ viewPanel: panelId });
+  return createUrl(`/d/${encodeURIComponent(dashboardUID)}`, panelParams);
 }
 
 // keep retrying fn if it's error passes shouldRetry(error) and timeout has not elapsed yet
@@ -194,4 +206,41 @@ export function sortAlerts(sortOrder: SortOrder, alerts: Alert[]): Alert[] {
   }
 
   return result;
+}
+
+export function isOpenSourceEdition() {
+  const buildInfo = config.buildInfo;
+  return buildInfo.edition === GrafanaEdition.OpenSource;
+}
+
+export function isAdmin() {
+  return contextSrv.hasRole('Admin') || contextSrv.isGrafanaAdmin;
+}
+
+export function isLocalDevEnv() {
+  const buildInfo = config.buildInfo;
+  return buildInfo.env === 'development';
+}
+
+export function isErrorLike(error: unknown): error is Error {
+  return Boolean(error && typeof error === 'object' && 'message' in error);
+}
+
+export function stringifyErrorLike(error: unknown): string {
+  const fetchError = isFetchError(error);
+  if (fetchError) {
+    if (error.message) {
+      return error.message;
+    }
+    if ('message' in error.data && typeof error.data.message === 'string') {
+      return error.data.message;
+    }
+    if (error.statusText) {
+      return error.statusText;
+    }
+
+    return String(error.status) || 'Unknown error';
+  }
+
+  return isErrorLike(error) ? error.message : String(error);
 }

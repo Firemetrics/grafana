@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/server"
 	"github.com/grafana/grafana/pkg/services/correlations"
 	"github.com/grafana/grafana/pkg/services/datasources"
@@ -18,6 +19,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/services/user/userimpl"
 	"github.com/grafana/grafana/pkg/tests/testinfra"
+	"github.com/grafana/grafana/pkg/tests/testsuite"
 )
 
 type errorResponseBody struct {
@@ -28,6 +30,10 @@ type errorResponseBody struct {
 type TestContext struct {
 	env server.TestEnv
 	t   *testing.T
+}
+
+func TestMain(m *testing.M) {
+	testsuite.Run(m)
 }
 
 func NewTestEnv(t *testing.T) TestContext {
@@ -45,18 +51,19 @@ func NewTestEnv(t *testing.T) TestContext {
 
 type User struct {
 	User     user.User
-	password string
+	password user.Password
 }
 
 type GetParams struct {
 	url  string
 	user User
+	page string
 }
 
 func (c TestContext) Get(params GetParams) *http.Response {
 	c.t.Helper()
-
-	resp, err := http.Get(c.getURL(params.url, params.user))
+	fmtUrl := fmt.Sprintf("%s?page=%s", params.url, params.page)
+	resp, err := http.Get(c.getURL(fmtUrl, params.user))
 	require.NoError(c.t, err)
 
 	return resp
@@ -133,16 +140,31 @@ func (c TestContext) getURL(url string, user User) string {
 	)
 }
 
+func (c TestContext) createOrg(name string) int64 {
+	c.t.Helper()
+	store := c.env.SQLStore
+	c.env.Cfg.AutoAssignOrg = false
+	quotaService := quotaimpl.ProvideService(store, c.env.Cfg)
+	orgService, err := orgimpl.ProvideService(store, c.env.Cfg, quotaService)
+	require.NoError(c.t, err)
+	orgId, err := orgService.GetOrCreate(context.Background(), name)
+	require.NoError(c.t, err)
+	return orgId
+}
+
 func (c TestContext) createUser(cmd user.CreateUserCommand) User {
 	c.t.Helper()
 	store := c.env.SQLStore
-	store.Cfg.AutoAssignOrg = true
-	store.Cfg.AutoAssignOrgId = 1
+	c.env.Cfg.AutoAssignOrg = true
+	c.env.Cfg.AutoAssignOrgId = 1
 
-	quotaService := quotaimpl.ProvideService(store, store.Cfg)
-	orgService, err := orgimpl.ProvideService(store, store.Cfg, quotaService)
+	quotaService := quotaimpl.ProvideService(store, c.env.Cfg)
+	orgService, err := orgimpl.ProvideService(store, c.env.Cfg, quotaService)
 	require.NoError(c.t, err)
-	usrSvc, err := userimpl.ProvideService(store, orgService, store.Cfg, nil, nil, quotaService, supportbundlestest.NewFakeBundleService())
+	usrSvc, err := userimpl.ProvideService(
+		store, orgService, c.env.Cfg, nil, nil, tracing.InitializeTracerForTest(),
+		quotaService, supportbundlestest.NewFakeBundleService(),
+	)
 	require.NoError(c.t, err)
 
 	user, err := usrSvc.Create(context.Background(), &cmd)
@@ -168,4 +190,11 @@ func (c TestContext) createCorrelation(cmd correlations.CreateCorrelationCommand
 
 	require.NoError(c.t, err)
 	return correlation
+}
+
+func (c TestContext) createOrUpdateCorrelation(cmd correlations.CreateCorrelationCommand) {
+	c.t.Helper()
+	err := c.env.Server.HTTPServer.CorrelationsService.CreateOrUpdateCorrelation(context.Background(), cmd)
+
+	require.NoError(c.t, err)
 }

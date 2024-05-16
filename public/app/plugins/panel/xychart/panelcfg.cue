@@ -16,11 +16,7 @@ package grafanaplugin
 
 import (
 	"github.com/grafana/grafana/packages/grafana-schema/src/common"
-	"github.com/grafana/grafana/pkg/plugins/pfs"
 )
-
-// This file (with its sibling .cue files) implements pfs.GrafanaPlugin
-pfs.GrafanaPlugin
 
 composableKinds: PanelCfg: {
 	maturity: "experimental"
@@ -29,37 +25,42 @@ composableKinds: PanelCfg: {
 		schemas: [{
 			version: [0, 0]
 			schema: {
-
+				// Auto is "table" in the UI
 				SeriesMapping: "auto" | "manual"                   @cuetsy(kind="enum")
 				ScatterShow:   "points" | "lines" | "points+lines" @cuetsy(kind="enum", memberNames="Points|Lines|PointsAndLines")
 
+				// Configuration for the Table/Auto mode
 				XYDimensionConfig: {
 					frame: int32 & >=0
 					x?:    string
 					exclude?: [...string]
 				} @cuetsy(kind="interface")
 
-				ScatterFieldConfig: {
+				FieldConfig: {
 					common.HideableFieldConfig
 					common.AxisConfig
 
 					show?: ScatterShow & (*"points" | _)
 
 					pointSize?:  common.ScaleDimensionConfig
-					lineColor?:  common.ColorDimensionConfig
 					pointColor?: common.ColorDimensionConfig
-					labelValue?: common.TextDimensionConfig
+					// pointSymbol?: common.ResourceDimensionConfig
+					// fillOpacity?: number & >=0 & <=1 | *0.5
 
+					lineColor?: common.ColorDimensionConfig
 					lineWidth?: int32 & >=0
 					lineStyle?: common.LineStyle
-					label?:     common.VisibilityMode & (*"auto" | _)
+
+					label?:      common.VisibilityMode & (*"auto" | _)
+					labelValue?: common.TextDimensionConfig
 				} @cuetsy(kind="interface",TSVeneer="type")
 
 				ScatterSeriesConfig: {
-					ScatterFieldConfig
-					x?:    string
-					y?:    string
-					name?: string
+					FieldConfig
+					x?:     string
+					y?:     string
+					name?:  string
+					frame?: number
 				} @cuetsy(kind="interface")
 
 				Options: {
@@ -67,7 +68,11 @@ composableKinds: PanelCfg: {
 					common.OptionsWithTooltip
 
 					seriesMapping?: SeriesMapping
-					dims:           XYDimensionConfig
+
+					// Table Mode (auto)
+					dims: XYDimensionConfig
+
+					// Manual Mode
 					series: [...ScatterSeriesConfig]
 				} @cuetsy(kind="interface")
 			}

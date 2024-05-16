@@ -4,12 +4,15 @@
 //     public/app/plugins/gen.go
 // Using jennies:
 //     TSTypesJenny
-//     PluginTSTypesJenny
+//     PluginTsTypesJenny
 //
 // Run 'make gen-cue' from repository root to regenerate.
 
 import * as common from '@grafana/schema';
 
+/**
+ * Auto is "table" in the UI
+ */
 export enum SeriesMapping {
   Auto = 'auto',
   Manual = 'manual',
@@ -21,6 +24,9 @@ export enum ScatterShow {
   PointsAndLines = 'points+lines',
 }
 
+/**
+ * Configuration for the Table/Auto mode
+ */
 export interface XYDimensionConfig {
   exclude?: Array<string>;
   frame: number;
@@ -31,7 +37,7 @@ export const defaultXYDimensionConfig: Partial<XYDimensionConfig> = {
   exclude: [],
 };
 
-export interface ScatterFieldConfig extends common.HideableFieldConfig, common.AxisConfig {
+export interface FieldConfig extends common.HideableFieldConfig, common.AxisConfig {
   label?: common.VisibilityMode;
   labelValue?: common.TextDimensionConfig;
   lineColor?: common.ColorDimensionConfig;
@@ -42,19 +48,26 @@ export interface ScatterFieldConfig extends common.HideableFieldConfig, common.A
   show?: ScatterShow;
 }
 
-export const defaultScatterFieldConfig: Partial<ScatterFieldConfig> = {
+export const defaultFieldConfig: Partial<FieldConfig> = {
   label: common.VisibilityMode.Auto,
   show: ScatterShow.Points,
 };
 
-export interface ScatterSeriesConfig extends ScatterFieldConfig {
+export interface ScatterSeriesConfig extends FieldConfig {
+  frame?: number;
   name?: string;
   x?: string;
   y?: string;
 }
 
 export interface Options extends common.OptionsWithLegend, common.OptionsWithTooltip {
+  /**
+   * Table Mode (auto)
+   */
   dims: XYDimensionConfig;
+  /**
+   * Manual Mode
+   */
   series: Array<ScatterSeriesConfig>;
   seriesMapping?: SeriesMapping;
 }

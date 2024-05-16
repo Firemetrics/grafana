@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	errBadForm = errutil.NewBase(errutil.StatusBadRequest, "form-auth.invalid", errutil.WithPublicMessage("bad login data"))
+	errBadForm = errutil.BadRequest("form-auth.invalid", errutil.WithPublicMessage("bad login data"))
 )
 
 var _ authn.Client = new(Form)
@@ -37,4 +37,8 @@ func (c *Form) Authenticate(ctx context.Context, r *authn.Request) (*authn.Ident
 		return nil, errBadForm.Errorf("failed to parse request: %w", err)
 	}
 	return c.client.AuthenticatePassword(ctx, r, form.Username, form.Password)
+}
+
+func (c *Form) IsEnabled() bool {
+	return true
 }

@@ -4,13 +4,12 @@ import React, { HTMLProps, useRef } from 'react';
 
 import { GrafanaTheme2, deprecationWarning } from '@grafana/data';
 
-import { stylesFactory, useTheme2 } from '../../themes';
+import { useStyles2 } from '../../themes';
 import { getFocusStyles, getMouseFocusStyles } from '../../themes/mixins';
+import { Icon } from '../Icon/Icon';
 
 export interface Props extends Omit<HTMLProps<HTMLInputElement>, 'value'> {
   value?: boolean;
-  /** Make inline switch's background and border transparent */
-  transparent?: boolean;
   /** Show an invalid state around the input */
   invalid?: boolean;
 }
@@ -21,8 +20,7 @@ export const Switch = React.forwardRef<HTMLInputElement, Props>(
       deprecationWarning('Switch', 'checked prop', 'value');
     }
 
-    const theme = useTheme2();
-    const styles = getSwitchStyles(theme);
+    const styles = useStyles2(getSwitchStyles);
     const switchIdRef = useRef(id ? id : uniqueId('switch-'));
 
     return (
@@ -38,7 +36,9 @@ export const Switch = React.forwardRef<HTMLInputElement, Props>(
           {...inputProps}
           ref={ref}
         />
-        <label htmlFor={switchIdRef.current} aria-label={label ?? 'Toggle switch'} />
+        <label htmlFor={switchIdRef.current} aria-label={label ?? 'Toggle switch'}>
+          <Icon name="check" size="xs" />
+        </label>
       </div>
     );
   }
@@ -47,13 +47,15 @@ export const Switch = React.forwardRef<HTMLInputElement, Props>(
 Switch.displayName = 'Switch';
 
 export interface InlineSwitchProps extends Props {
+  /** Label to show next to the switch */
   showLabel?: boolean;
+  /** Make inline switch's background and border transparent */
+  transparent?: boolean;
 }
 
 export const InlineSwitch = React.forwardRef<HTMLInputElement, InlineSwitchProps>(
   ({ transparent, className, showLabel, label, value, id, invalid, ...props }, ref) => {
-    const theme = useTheme2();
-    const styles = getSwitchStyles(theme, transparent);
+    const styles = useStyles2(getSwitchStyles, transparent);
 
     return (
       <div
@@ -75,114 +77,123 @@ export const InlineSwitch = React.forwardRef<HTMLInputElement, InlineSwitchProps
 
 InlineSwitch.displayName = 'Switch';
 
-const getSwitchStyles = stylesFactory((theme: GrafanaTheme2, transparent?: boolean) => {
-  return {
-    switch: css`
-      width: 32px;
-      height: 16px;
-      position: relative;
+const getSwitchStyles = (theme: GrafanaTheme2, transparent?: boolean) => ({
+  switch: css({
+    width: '32px',
+    height: '16px',
+    position: 'relative',
+    lineHeight: 1,
 
-      input {
-        opacity: 0;
-        left: -100vw;
-        z-index: -1000;
-        position: absolute;
+    input: {
+      opacity: 0,
+      left: '-100vw',
+      zIndex: -1000,
+      position: 'absolute',
 
-        &:disabled + label {
-          background: ${theme.colors.action.disabledBackground};
-          cursor: not-allowed;
-        }
+      '&:checked + label': {
+        background: theme.colors.primary.main,
+        borderColor: theme.colors.primary.main,
 
-        &:checked + label {
-          background: ${theme.colors.primary.main};
-          border-color: ${theme.colors.primary.main};
+        '&:hover': {
+          background: theme.colors.primary.shade,
+        },
 
-          &:hover {
-            background: ${theme.colors.primary.shade};
-          }
+        svg: {
+          transform: 'translate3d(17px, -50%, 0)',
+          background: theme.colors.primary.contrastText,
+          color: theme.colors.primary.main,
+        },
+      },
 
-          &::after {
-            transform: translate3d(18px, -50%, 0);
-            background: ${theme.colors.primary.contrastText};
-          }
-        }
+      '&:disabled + label': {
+        background: theme.colors.action.disabledBackground,
+        borderColor: theme.colors.border.weak,
+        cursor: 'not-allowed',
 
-        &:focus + label,
-        &:focus-visible + label {
-          ${getFocusStyles(theme)}
-        }
+        svg: {
+          background: theme.colors.text.disabled,
+        },
+      },
 
-        &:focus:not(:focus-visible) + label {
-          ${getMouseFocusStyles(theme)}
-        }
-      }
+      '&:disabled:checked + label': {
+        background: theme.colors.primary.transparent,
 
-      label {
-        width: 100%;
-        height: 100%;
-        cursor: pointer;
-        border: none;
-        border-radius: ${theme.shape.radius.pill};
-        background: ${theme.components.input.background};
-        border: 1px solid ${theme.components.input.borderColor};
-        transition: all 0.3s ease;
+        svg: {
+          color: theme.colors.primary.contrastText,
+        },
+      },
 
-        &:hover {
-          border-color: ${theme.components.input.borderHover};
-        }
+      '&:focus + label, &:focus-visible + label': getFocusStyles(theme),
 
-        &::after {
-          position: absolute;
-          display: block;
-          content: '';
-          width: 12px;
-          height: 12px;
-          border-radius: ${theme.shape.radius.circle};
-          background: ${theme.colors.text.secondary};
-          box-shadow: ${theme.shadows.z1};
-          top: 50%;
-          transform: translate3d(2px, -50%, 0);
-          transition: transform 0.2s cubic-bezier(0.19, 1, 0.22, 1);
-        }
-      }
-    `,
-    inlineContainer: css`
-      padding: ${theme.spacing(0, 1)};
-      height: ${theme.spacing(theme.components.height.md)};
-      display: inline-flex;
-      align-items: center;
-      background: ${transparent ? 'transparent' : theme.components.input.background};
-      border: 1px solid ${transparent ? 'transparent' : theme.components.input.borderColor};
-      border-radius: ${theme.shape.borderRadius()};
+      '&:focus:not(:focus-visible) + label': getMouseFocusStyles(theme),
+    },
 
-      &:hover {
-        border: 1px solid ${transparent ? 'transparent' : theme.components.input.borderHover};
+    label: {
+      width: '100%',
+      height: '100%',
+      cursor: 'pointer',
+      borderRadius: theme.shape.radius.pill,
+      background: theme.components.input.background,
+      border: `1px solid ${theme.components.input.borderColor}`,
+      transition: 'all 0.3s ease',
 
-        .inline-switch-label {
-          color: ${theme.colors.text.primary};
-        }
-      }
-    `,
-    disabled: css`
-      background-color: rgba(204, 204, 220, 0.04);
-      color: rgba(204, 204, 220, 0.6);
-      border: 1px solid rgba(204, 204, 220, 0.04);
-    `,
-    inlineLabel: css`
-      cursor: pointer;
-      padding-right: ${theme.spacing(1)};
-      color: ${theme.colors.text.secondary};
-      white-space: nowrap;
-    `,
-    inlineLabelEnabled: css`
-      color: ${theme.colors.text.primary};
-    `,
-    invalid: css`
-      input + label,
-      input:checked + label,
-      input:hover + label {
-        border: 1px solid ${theme.colors.error.border};
-      }
-    `,
-  };
+      '&:hover': {
+        borderColor: theme.components.input.borderHover,
+      },
+
+      svg: {
+        position: 'absolute',
+        display: 'block',
+        color: 'transparent',
+        width: '12px',
+        height: '12px',
+        borderRadius: theme.shape.radius.circle,
+        background: theme.colors.text.secondary,
+        boxShadow: theme.shadows.z1,
+        top: '50%',
+        transform: 'translate3d(1px, -50%, 0)',
+        transition: 'transform 0.2s cubic-bezier(0.19, 1, 0.22, 1)',
+
+        '@media (forced-colors: active)': {
+          border: `1px solid ${theme.colors.primary.contrastText}`,
+        },
+      },
+    },
+  }),
+  inlineContainer: css({
+    padding: theme.spacing(0, 1),
+    height: theme.spacing(theme.components.height.md),
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: transparent ? 'transparent' : theme.components.input.background,
+    border: `1px solid ${transparent ? 'transparent' : theme.components.input.borderColor}`,
+    borderRadius: theme.shape.radius.default,
+
+    '&:hover': {
+      border: `1px solid ${transparent ? 'transparent' : theme.components.input.borderHover}`,
+
+      '.inline-switch-label': {
+        color: theme.colors.text.primary,
+      },
+    },
+  }),
+  disabled: css({
+    backgroundColor: 'rgba(204, 204, 220, 0.04)',
+    color: 'rgba(204, 204, 220, 0.6)',
+    border: '1px solid rgba(204, 204, 220, 0.04)',
+  }),
+  inlineLabel: css({
+    cursor: 'pointer',
+    paddingRight: theme.spacing(1),
+    color: theme.colors.text.secondary,
+    whiteSpace: 'nowrap',
+  }),
+  inlineLabelEnabled: css({
+    color: theme.colors.text.primary,
+  }),
+  invalid: css({
+    'input + label, input:checked + label, input:hover + label': {
+      border: `1px solid ${theme.colors.error.border}`,
+    },
+  }),
 });

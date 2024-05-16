@@ -3,13 +3,18 @@ _build:
   list: false
 aliases:
   - ../guides/whats-new-in-v9-1/
-description: Feature and improvement highlights for Grafana v9.1
+description: Learn about new and updated features in Grafana v9.1
 keywords:
   - grafana
   - new
   - documentation
   - '9.1'
   - release notes
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: What's new in Grafana v9.1
 weight: -33
 ---
@@ -19,7 +24,7 @@ weight: -33
 We're excited to announce Grafana v9.1, with a variety of improvements that focus on Grafana's usability, performance, and security.
 Read on to learn about new options to share and embed dashboards, search and navigation enhancements, new panel options, and additional authentication features.
 You can also find out more about new single sign-on and role-based access control options in Grafana Enterprise, and more.
-For details, see the complete [changelog](https://github.com/grafana/grafana/blob/master/CHANGELOG.md).
+For details, see the complete [changelog](https://github.com/grafana/grafana/blob/main/CHANGELOG.md).
 
 ## OSS
 

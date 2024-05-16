@@ -8,7 +8,7 @@ import { FieldConfig, Options } from './panelcfg.gen';
 import { TrendSuggestionsSupplier } from './suggestions';
 
 export const plugin = new PanelPlugin<Options, FieldConfig>(TrendPanel)
-  .useFieldConfig(getGraphFieldConfig(defaultGraphConfig))
+  .useFieldConfig(getGraphFieldConfig(defaultGraphConfig, false))
   .setPanelOptions((builder) => {
     const category = ['X Axis'];
     builder.addFieldNamePicker({
@@ -24,7 +24,7 @@ export const plugin = new PanelPlugin<Options, FieldConfig>(TrendPanel)
       },
     });
 
-    commonOptionsBuilder.addTooltipOptions(builder);
+    commonOptionsBuilder.addTooltipOptions(builder, false, true);
     commonOptionsBuilder.addLegendOptions(builder);
   })
   .setSuggestionsSupplier(new TrendSuggestionsSupplier());

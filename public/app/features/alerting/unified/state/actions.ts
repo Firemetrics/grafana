@@ -2,16 +2,12 @@ import { AsyncThunk, createAsyncThunk } from '@reduxjs/toolkit';
 import { isEmpty } from 'lodash';
 
 import { locationService } from '@grafana/runtime';
+import { logMeasurement } from '@grafana/runtime/src/utils/logging';
 import {
-  AlertmanagerAlert,
   AlertManagerCortexConfig,
   AlertmanagerGroup,
-  ExternalAlertmanagerConfig,
-  ExternalAlertmanagersResponse,
   Matcher,
   Receiver,
-  Silence,
-  SilenceCreatePayload,
   TestReceiversAlert,
 } from 'app/plugins/datasource/alertmanager/types';
 import { FolderDTO, NotifierDTO, StoreState, ThunkResult } from 'app/types';
@@ -33,25 +29,24 @@ import {
 } from 'app/types/unified-alerting-dto';
 
 import { backendSrv } from '../../../../core/services/backend_srv';
-import { logInfo, LogMessages, withPerformanceLogging } from '../Analytics';
 import {
-  addAlertManagers,
-  createOrUpdateSilence,
+  logInfo,
+  LogMessages,
+  trackSwitchToPoliciesRouting,
+  trackSwitchToSimplifiedRouting,
+  withPerformanceLogging,
+  withPromRulesMetadataLogging,
+  withRulerRulesMetadataLogging,
+} from '../Analytics';
+import {
   deleteAlertManagerConfig,
-  expireSilence,
   fetchAlertGroups,
-  fetchAlertManagerConfig,
-  fetchAlerts,
-  fetchExternalAlertmanagerConfig,
-  fetchExternalAlertmanagers,
-  fetchSilences,
-  fetchStatus,
   testReceivers,
   updateAlertManagerConfig,
 } from '../api/alertmanager';
+import { alertmanagerApi } from '../api/alertmanagerApi';
 import { fetchAnnotations } from '../api/annotations';
 import { discoverFeatures } from '../api/buildInfo';
-import { featureDiscoveryApi } from '../api/featureDiscoveryApi';
 import { fetchNotifiers } from '../api/grafana';
 import { FetchPromRulesFilter, fetchRules } from '../api/prometheus';
 import {
@@ -61,6 +56,7 @@ import {
   FetchRulerRulesFilter,
   setRulerRuleGroup,
 } from '../api/ruler';
+import { encodeGrafanaNamespace } from '../components/expressions/util';
 import { RuleFormType, RuleFormValues } from '../types/rule-form';
 import { addDefaultsToAlertmanagerConfig, removeMuteTimingFromRoute } from '../utils/alertmanager';
 import {
@@ -68,16 +64,13 @@ import {
   getRulesDataSource,
   getRulesSourceName,
   GRAFANA_RULES_SOURCE_NAME,
-  isVanillaPrometheusAlertManagerDataSource,
 } from '../utils/datasource';
-import { makeAMLink, retryWhile } from '../utils/misc';
-import { AsyncRequestMapSlice, messageFromError, withAppEvents, withSerializedError } from '../utils/redux';
+import { makeAMLink } from '../utils/misc';
+import { AsyncRequestMapSlice, withAppEvents, withSerializedError } from '../utils/redux';
 import * as ruleId from '../utils/rule-id';
 import { getRulerClient } from '../utils/rulerClient';
-import { getAlertInfo, isRulerNotSupportedResponse } from '../utils/rules';
-import { safeParseDurationstr } from '../utils/time';
-
-const FETCH_CONFIG_RETRY_TIMEOUT = 30 * 1000;
+import { getAlertInfo, isGrafanaRulerRule, isRulerNotSupportedResponse } from '../utils/rules';
+import { safeParsePrometheusDuration } from '../utils/time';
 
 function getDataSourceConfig(getState: () => unknown, rulesSourceName: string) {
   const dataSources = (getState() as StoreState).unifiedAlerting.dataSources;
@@ -120,7 +113,7 @@ export const fetchPromRulesAction = createAsyncThunk(
   ): Promise<RuleNamespace[]> => {
     await thunkAPI.dispatch(fetchRulesSourceBuildInfoAction({ rulesSourceName }));
 
-    const fetchRulesWithLogging = withPerformanceLogging(fetchRules, `[${rulesSourceName}] Prometheus rules loaded`, {
+    const fetchRulesWithLogging = withPromRulesMetadataLogging('unifiedalerting/fetchPromRules', fetchRules, {
       dataSourceName: rulesSourceName,
       thunk: 'unifiedalerting/fetchPromRules',
     });
@@ -128,90 +121,6 @@ export const fetchPromRulesAction = createAsyncThunk(
     return await withSerializedError(
       fetchRulesWithLogging(rulesSourceName, filter, limitAlerts, matcher, state, identifier)
     );
-  }
-);
-
-export const fetchAlertManagerConfigAction = createAsyncThunk(
-  'unifiedalerting/fetchAmConfig',
-  (alertManagerSourceName: string, thunkAPI): Promise<AlertManagerCortexConfig> =>
-    withSerializedError(
-      (async () => {
-        // for vanilla prometheus, there is no config endpoint. Only fetch config from status
-        if (isVanillaPrometheusAlertManagerDataSource(alertManagerSourceName)) {
-          return fetchStatus(alertManagerSourceName).then((status) => ({
-            alertmanager_config: status.config,
-            template_files: {},
-          }));
-        }
-
-        const { data: amFeatures } = await thunkAPI.dispatch(
-          featureDiscoveryApi.endpoints.discoverAmFeatures.initiate({
-            amSourceName: alertManagerSourceName,
-          })
-        );
-
-        const lazyConfigInitSupported = amFeatures?.lazyConfigInit ?? false;
-        const fetchAMconfigWithLogging = withPerformanceLogging(
-          fetchAlertManagerConfig,
-          `[${alertManagerSourceName}] Alertmanager config loaded`,
-          {
-            dataSourceName: alertManagerSourceName,
-            thunk: 'unifiedalerting/fetchAmConfig',
-          }
-        );
-
-        return retryWhile(
-          () => fetchAMconfigWithLogging(alertManagerSourceName),
-          // if config has been recently deleted, it takes a while for cortex start returning the default one.
-          // retry for a short while instead of failing
-          (e) => !!messageFromError(e)?.includes('alertmanager storage object not found') && !lazyConfigInitSupported,
-          FETCH_CONFIG_RETRY_TIMEOUT
-        )
-          .then((result) => {
-            // if user config is empty for cortex alertmanager, try to get config from status endpoint
-            if (
-              isEmpty(result.alertmanager_config) &&
-              isEmpty(result.template_files) &&
-              alertManagerSourceName !== GRAFANA_RULES_SOURCE_NAME
-            ) {
-              return fetchStatus(alertManagerSourceName).then((status) => ({
-                alertmanager_config: status.config,
-                template_files: {},
-                template_file_provenances: result.template_file_provenances,
-                last_applied: result.last_applied,
-                id: result.id,
-              }));
-            }
-            return result;
-          })
-          .catch((e) => {
-            // When mimir doesn't have fallback AM url configured the default response will be as above
-            // However it's fine, and it's possible to create AM configuration
-            if (lazyConfigInitSupported && messageFromError(e)?.includes('alertmanager storage object not found')) {
-              return Promise.resolve<AlertManagerCortexConfig>({
-                alertmanager_config: {},
-                template_files: {},
-                template_file_provenances: {},
-              });
-            }
-
-            throw e;
-          });
-      })()
-    )
-);
-
-export const fetchExternalAlertmanagersAction = createAsyncThunk(
-  'unifiedAlerting/fetchExternalAlertmanagers',
-  (): Promise<ExternalAlertmanagersResponse> => {
-    return withSerializedError(fetchExternalAlertmanagers());
-  }
-);
-
-export const fetchExternalAlertmanagersConfigAction = createAsyncThunk(
-  'unifiedAlerting/fetchExternAlertmanagersConfig',
-  (): Promise<ExternalAlertmanagerConfig> => {
-    return withSerializedError(fetchExternalAlertmanagerConfig());
   }
 );
 
@@ -230,9 +139,9 @@ export const fetchRulerRulesAction = createAsyncThunk(
     await dispatch(fetchRulesSourceBuildInfoAction({ rulesSourceName }));
     const rulerConfig = getDataSourceRulerConfig(getState, rulesSourceName);
 
-    const fetchRulerRulesWithLogging = withPerformanceLogging(
+    const fetchRulerRulesWithLogging = withRulerRulesMetadataLogging(
+      'unifiedalerting/fetchRulerRules',
       fetchRulerRules,
-      `[${rulesSourceName}] Ruler rules loaded`,
       {
         dataSourceName: rulesSourceName,
         thunk: 'unifiedalerting/fetchRulerRules',
@@ -246,36 +155,28 @@ export const fetchRulerRulesAction = createAsyncThunk(
 export function fetchPromAndRulerRulesAction({
   rulesSourceName,
   identifier,
+  filter,
+  limitAlerts,
+  matcher,
+  state,
 }: {
   rulesSourceName: string;
   identifier?: RuleIdentifier;
-}): ThunkResult<void> {
+  filter?: FetchPromRulesFilter;
+  limitAlerts?: number;
+  matcher?: Matcher[];
+  state?: string[];
+}): ThunkResult<Promise<void>> {
   return async (dispatch, getState) => {
     await dispatch(fetchRulesSourceBuildInfoAction({ rulesSourceName }));
     const dsConfig = getDataSourceConfig(getState, rulesSourceName);
 
-    await dispatch(fetchPromRulesAction({ rulesSourceName, identifier }));
+    await dispatch(fetchPromRulesAction({ rulesSourceName, identifier, filter, limitAlerts, matcher, state }));
     if (dsConfig.rulerConfig) {
       await dispatch(fetchRulerRulesAction({ rulesSourceName }));
     }
   };
 }
-
-export const fetchSilencesAction = createAsyncThunk(
-  'unifiedalerting/fetchSilences',
-  (alertManagerSourceName: string): Promise<Silence[]> => {
-    const fetchSilencesWithLogging = withPerformanceLogging(
-      fetchSilences,
-      `[${alertManagerSourceName}] Silences loaded`,
-      {
-        dataSourceName: alertManagerSourceName,
-        thunk: 'unifiedalerting/fetchSilences',
-      }
-    );
-
-    return withSerializedError(fetchSilencesWithLogging(alertManagerSourceName));
-  }
-);
 
 // this will only trigger ruler rules fetch if rules are not loaded yet and request is not in flight
 export function fetchRulerRulesIfNotFetchedYet(rulesSourceName: string): ThunkResult<void> {
@@ -324,8 +225,8 @@ export const fetchRulesSourceBuildInfoAction = createAsyncThunk(
         const { id, name } = ds;
 
         const discoverFeaturesWithLogging = withPerformanceLogging(
+          'unifiedalerting/fetchPromBuildinfo',
           discoverFeatures,
-          `[${rulesSourceName}] Rules source features discovered`,
           {
             dataSourceName: rulesSourceName,
             thunk: 'unifiedalerting/fetchPromBuildinfo',
@@ -397,8 +298,8 @@ export function fetchAllPromAndRulerRulesAction(
       })
     );
 
-    logInfo('All Prom and Ruler rules loaded', {
-      loadTimeMs: (performance.now() - allStartLoadingTs).toFixed(0),
+    logMeasurement('unifiedalerting/fetchAllPromAndRulerRulesAction', {
+      loadTimeMs: performance.now() - allStartLoadingTs,
     });
   };
 }
@@ -449,6 +350,8 @@ export function deleteRuleAction(
    * reload ruler rules
    */
   return async (dispatch, getState) => {
+    await dispatch(fetchRulesSourceBuildInfoAction({ rulesSourceName: ruleIdentifier.ruleSourceName }));
+
     withAppEvents(
       (async () => {
         const rulerConfig = getDataSourceRulerConfig(getState, ruleIdentifier.ruleSourceName);
@@ -514,6 +417,7 @@ export const saveRuleFormAction = createAsyncThunk(
             const rulerConfig = getDataSourceRulerConfig(thunkAPI.getState, GRAFANA_RULES_SOURCE_NAME);
             const rulerClient = getRulerClient(rulerConfig);
             identifier = await rulerClient.saveGrafanaRule(values, evaluateEvery, existing);
+            reportSwitchingRoutingType(values, existing);
             await thunkAPI.dispatch(fetchRulerRulesAction({ rulesSourceName: GRAFANA_RULES_SOURCE_NAME }));
           } else {
             throw new Error('Unexpected rule form type');
@@ -548,6 +452,24 @@ export const saveRuleFormAction = createAsyncThunk(
     )
 );
 
+function reportSwitchingRoutingType(values: RuleFormValues, existingRule: RuleWithLocation<RulerRuleDTO> | undefined) {
+  // track if the user switched from simplified routing to policies routing or vice versa
+  if (isGrafanaRulerRule(existingRule?.rule)) {
+    const ga = existingRule?.rule.grafana_alert;
+    const existingWasUsingSimplifiedRouting = Boolean(ga?.notification_settings?.receiver);
+    const newValuesUsesSimplifiedRouting = values.manualRouting;
+    const shouldTrackSwitchToSimplifiedRouting = !existingWasUsingSimplifiedRouting && newValuesUsesSimplifiedRouting;
+    const shouldTrackSwitchToPoliciesRouting = existingWasUsingSimplifiedRouting && !newValuesUsesSimplifiedRouting;
+
+    if (shouldTrackSwitchToSimplifiedRouting) {
+      trackSwitchToSimplifiedRouting();
+    }
+    if (shouldTrackSwitchToPoliciesRouting) {
+      trackSwitchToPoliciesRouting();
+    }
+  }
+}
+
 export const fetchGrafanaNotifiersAction = createAsyncThunk(
   'unifiedalerting/fetchGrafanaNotifiers',
   (): Promise<NotifierDTO[]> => withSerializedError(fetchNotifiers())
@@ -565,20 +487,20 @@ interface UpdateAlertManagerConfigActionOptions {
   successMessage?: string; // show toast on success
   redirectPath?: string; // where to redirect on success
   redirectSearch?: string; // additional redirect query params
-  refetch?: boolean; // refetch config on success
 }
 
 export const updateAlertManagerConfigAction = createAsyncThunk<void, UpdateAlertManagerConfigActionOptions, {}>(
   'unifiedalerting/updateAMConfig',
   (
-    { alertManagerSourceName, oldConfig, newConfig, successMessage, redirectPath, redirectSearch, refetch },
+    { alertManagerSourceName, oldConfig, newConfig, successMessage, redirectPath, redirectSearch },
     thunkAPI
   ): Promise<void> =>
     withAppEvents(
       withSerializedError(
         (async () => {
-          // TODO there must be a better way here than to dispatch another fetch as this causes re-rendering :(
-          const latestConfig = await thunkAPI.dispatch(fetchAlertManagerConfigAction(alertManagerSourceName)).unwrap();
+          const latestConfig = await thunkAPI
+            .dispatch(alertmanagerApi.endpoints.getAlertmanagerConfiguration.initiate(alertManagerSourceName))
+            .unwrap();
 
           const isLatestConfigEmpty = isEmpty(latestConfig.alertmanager_config) && isEmpty(latestConfig.template_files);
           const oldLastConfigsDiffer = JSON.stringify(latestConfig) !== JSON.stringify(oldConfig);
@@ -589,9 +511,7 @@ export const updateAlertManagerConfigAction = createAsyncThunk<void, UpdateAlert
             );
           }
           await updateAlertManagerConfig(alertManagerSourceName, addDefaultsToAlertmanagerConfig(newConfig));
-          if (refetch) {
-            await thunkAPI.dispatch(fetchAlertManagerConfigAction(alertManagerSourceName));
-          }
+          thunkAPI.dispatch(alertmanagerApi.util.invalidateTags(['AlertmanagerConfiguration']));
           if (redirectPath) {
             const options = new URLSearchParams(redirectSearch ?? '');
             locationService.push(makeAMLink(redirectPath, alertManagerSourceName, options));
@@ -604,50 +524,12 @@ export const updateAlertManagerConfigAction = createAsyncThunk<void, UpdateAlert
     )
 );
 
-export const fetchAmAlertsAction = createAsyncThunk(
-  'unifiedalerting/fetchAmAlerts',
-  (alertManagerSourceName: string): Promise<AlertmanagerAlert[]> =>
-    withSerializedError(fetchAlerts(alertManagerSourceName, [], true, true, true))
-);
-
-export const expireSilenceAction = (alertManagerSourceName: string, silenceId: string): ThunkResult<void> => {
-  return async (dispatch) => {
-    await withAppEvents(expireSilence(alertManagerSourceName, silenceId), {
-      successMessage: 'Silence expired.',
-    });
-    dispatch(fetchSilencesAction(alertManagerSourceName));
-    dispatch(fetchAmAlertsAction(alertManagerSourceName));
-  };
-};
-
-type UpdateSilenceActionOptions = {
-  alertManagerSourceName: string;
-  payload: SilenceCreatePayload;
-  exitOnSave: boolean;
-  successMessage?: string;
-};
-
-export const createOrUpdateSilenceAction = createAsyncThunk<void, UpdateSilenceActionOptions, {}>(
-  'unifiedalerting/updateSilence',
-  ({ alertManagerSourceName, payload, exitOnSave, successMessage }): Promise<void> =>
-    withAppEvents(
-      withSerializedError(
-        (async () => {
-          await createOrUpdateSilence(alertManagerSourceName, payload);
-          if (exitOnSave) {
-            locationService.push('/alerting/silences');
-          }
-        })()
-      ),
-      {
-        successMessage,
-      }
-    )
-);
-
 export const deleteReceiverAction = (receiverName: string, alertManagerSourceName: string): ThunkResult<void> => {
-  return (dispatch, getState) => {
-    const config = getState().unifiedAlerting.amConfigs?.[alertManagerSourceName]?.result;
+  return async (dispatch) => {
+    const config = await dispatch(
+      alertmanagerApi.endpoints.getAlertmanagerConfiguration.initiate(alertManagerSourceName)
+    ).unwrap();
+
     if (!config) {
       throw new Error(`Config for ${alertManagerSourceName} not found`);
     }
@@ -667,15 +549,17 @@ export const deleteReceiverAction = (receiverName: string, alertManagerSourceNam
         oldConfig: config,
         alertManagerSourceName,
         successMessage: 'Contact point deleted.',
-        refetch: true,
       })
     );
   };
 };
 
 export const deleteTemplateAction = (templateName: string, alertManagerSourceName: string): ThunkResult<void> => {
-  return (dispatch, getState) => {
-    const config = getState().unifiedAlerting.amConfigs?.[alertManagerSourceName]?.result;
+  return async (dispatch) => {
+    const config = await dispatch(
+      alertmanagerApi.endpoints.getAlertmanagerConfiguration.initiate(alertManagerSourceName)
+    ).unwrap();
+
     if (!config) {
       throw new Error(`Config for ${alertManagerSourceName} not found`);
     }
@@ -698,7 +582,6 @@ export const deleteTemplateAction = (templateName: string, alertManagerSourceNam
         oldConfig: config,
         alertManagerSourceName,
         successMessage: 'Template deleted.',
-        refetch: true,
       })
     );
   };
@@ -731,7 +614,7 @@ export const deleteAlertManagerConfigAction = createAsyncThunk(
       withSerializedError(
         (async () => {
           await deleteAlertManagerConfig(alertManagerSourceName);
-          await thunkAPI.dispatch(fetchAlertManagerConfigAction(alertManagerSourceName));
+          await thunkAPI.dispatch(alertmanagerApi.util.invalidateTags(['AlertmanagerConfiguration']));
         })()
       ),
       {
@@ -743,13 +626,29 @@ export const deleteAlertManagerConfigAction = createAsyncThunk(
 );
 
 export const deleteMuteTimingAction = (alertManagerSourceName: string, muteTimingName: string): ThunkResult<void> => {
-  return async (dispatch, getState) => {
-    const config = getState().unifiedAlerting.amConfigs[alertManagerSourceName].result;
+  return async (dispatch) => {
+    const config = await dispatch(
+      alertmanagerApi.endpoints.getAlertmanagerConfiguration.initiate(alertManagerSourceName)
+    ).unwrap();
 
-    const muteIntervals =
-      config?.alertmanager_config?.mute_time_intervals?.filter(({ name }) => name !== muteTimingName) ?? [];
+    const isGrafanaDatasource = alertManagerSourceName === GRAFANA_RULES_SOURCE_NAME;
+
+    const muteIntervalsFiltered =
+      (config?.alertmanager_config?.mute_time_intervals ?? [])?.filter(({ name }) => name !== muteTimingName) ?? [];
+    const timeIntervalsFiltered =
+      (config?.alertmanager_config?.time_intervals ?? [])?.filter(({ name }) => name !== muteTimingName) ?? [];
+
+    const time_intervals_without_mute_to_save = isGrafanaDatasource
+      ? {
+          mute_time_intervals: [...muteIntervalsFiltered, ...timeIntervalsFiltered],
+        }
+      : {
+          time_intervals: timeIntervalsFiltered,
+          mute_time_intervals: muteIntervalsFiltered,
+        };
 
     if (config) {
+      const { mute_time_intervals: _, ...configWithoutMuteTimings } = config?.alertmanager_config ?? {};
       withAppEvents(
         dispatch(
           updateAlertManagerConfigAction({
@@ -758,14 +657,13 @@ export const deleteMuteTimingAction = (alertManagerSourceName: string, muteTimin
             newConfig: {
               ...config,
               alertmanager_config: {
-                ...config.alertmanager_config,
+                ...configWithoutMuteTimings,
                 route: config.alertmanager_config.route
                   ? removeMuteTimingFromRoute(muteTimingName, config.alertmanager_config?.route)
                   : undefined,
-                mute_time_intervals: muteIntervals,
+                ...time_intervals_without_mute_to_save,
               },
             },
-            refetch: true,
           })
         ),
         {
@@ -800,13 +698,14 @@ interface UpdateNamespaceAndGroupOptions {
   newNamespaceName: string;
   newGroupName: string;
   groupInterval?: string;
+  folderUid?: string;
 }
 
 export const rulesInSameGroupHaveInvalidFor = (rules: RulerRuleDTO[], everyDuration: string) => {
   return rules.filter((rule: RulerRuleDTO) => {
     const { forDuration } = getAlertInfo(rule, everyDuration);
-    const forNumber = safeParseDurationstr(forDuration);
-    const everyNumber = safeParseDurationstr(everyDuration);
+    const forNumber = safeParsePrometheusDuration(forDuration);
+    const everyNumber = safeParsePrometheusDuration(everyDuration);
 
     return forNumber !== 0 && forNumber < everyNumber;
   });
@@ -823,13 +722,22 @@ export const updateLotexNamespaceAndGroupAction: AsyncThunk<
     return withAppEvents(
       withSerializedError(
         (async () => {
-          const { rulesSourceName, namespaceName, groupName, newNamespaceName, newGroupName, groupInterval } = options;
+          const {
+            rulesSourceName,
+            namespaceName,
+            groupName,
+            newNamespaceName,
+            newGroupName,
+            groupInterval,
+            folderUid,
+          } = options;
 
           const rulerConfig = getDataSourceRulerConfig(thunkAPI.getState, rulesSourceName);
           // fetch rules and perform sanity checks
           const rulesResult = await fetchRulerRules(rulerConfig);
 
           const existingNamespace = Boolean(rulesResult[namespaceName]);
+
           if (!existingNamespace) {
             throw new Error(`Namespace "${namespaceName}" not found.`);
           }
@@ -848,11 +756,14 @@ export const updateLotexNamespaceAndGroupAction: AsyncThunk<
           }
 
           const newNamespaceAlreadyExists = Boolean(rulesResult[newNamespaceName]);
-          if (newNamespaceName !== namespaceName && newNamespaceAlreadyExists) {
+          const isGrafanaManagedGroup = rulesSourceName === GRAFANA_RULES_SOURCE_NAME;
+          const originalNamespace = isGrafanaManagedGroup ? encodeGrafanaNamespace(namespaceName) : namespaceName;
+
+          if (newNamespaceName !== originalNamespace && newNamespaceAlreadyExists) {
             throw new Error(`Namespace "${newNamespaceName}" already exists.`);
           }
           if (
-            newNamespaceName === namespaceName &&
+            newNamespaceName === originalNamespace &&
             groupName === newGroupName &&
             groupInterval === existingGroup.interval
           ) {
@@ -874,8 +785,8 @@ export const updateLotexNamespaceAndGroupAction: AsyncThunk<
             }
           }
           // if renaming namespace - make new copies of all groups, then delete old namespace
-
-          if (newNamespaceName !== namespaceName) {
+          // this is only possible for cloud rules
+          if (newNamespaceName !== originalNamespace) {
             for (const group of rulesResult[namespaceName]) {
               await setRulerRuleGroup(
                 rulerConfig,
@@ -889,19 +800,19 @@ export const updateLotexNamespaceAndGroupAction: AsyncThunk<
                   : group
               );
             }
-            await deleteNamespace(rulerConfig, namespaceName);
+            await deleteNamespace(rulerConfig, folderUid || namespaceName);
 
             // if only modifying group...
           } else {
             // save updated group
-            await setRulerRuleGroup(rulerConfig, namespaceName, {
+            await setRulerRuleGroup(rulerConfig, folderUid || namespaceName, {
               ...existingGroup,
               name: newGroupName,
               interval: groupInterval,
             });
             // if group name was changed, delete old group
             if (newGroupName !== groupName) {
-              await deleteRulerRulesGroup(rulerConfig, namespaceName, groupName);
+              await deleteRulerRulesGroup(rulerConfig, folderUid || namespaceName, groupName);
             }
           }
 
@@ -922,6 +833,7 @@ interface UpdateRulesOrderOptions {
   namespaceName: string;
   groupName: string;
   newRules: RulerRuleDTO[];
+  folderUid: string;
 }
 
 export const updateRulesOrder = createAsyncThunk(
@@ -930,7 +842,7 @@ export const updateRulesOrder = createAsyncThunk(
     return withAppEvents(
       withSerializedError(
         (async () => {
-          const { rulesSourceName, namespaceName, groupName, newRules } = options;
+          const { rulesSourceName, namespaceName, groupName, newRules, folderUid } = options;
 
           const rulerConfig = getDataSourceRulerConfig(thunkAPI.getState, rulesSourceName);
           const rulesResult = await fetchRulerRules(rulerConfig);
@@ -946,7 +858,7 @@ export const updateRulesOrder = createAsyncThunk(
             rules: newRules,
           };
 
-          await setRulerRuleGroup(rulerConfig, namespaceName, payload);
+          await setRulerRuleGroup(rulerConfig, folderUid ?? namespaceName, payload);
 
           await thunkAPI.dispatch(fetchRulerRulesAction({ rulesSourceName }));
         })()
@@ -954,24 +866,6 @@ export const updateRulesOrder = createAsyncThunk(
       {
         errorMessage: 'Failed to update namespace / group',
         successMessage: 'Update successful',
-      }
-    );
-  }
-);
-
-export const addExternalAlertmanagersAction = createAsyncThunk(
-  'unifiedAlerting/addExternalAlertmanagers',
-  async (alertmanagerConfig: ExternalAlertmanagerConfig, thunkAPI): Promise<void> => {
-    return withAppEvents(
-      withSerializedError(
-        (async () => {
-          await addAlertManagers(alertmanagerConfig);
-          thunkAPI.dispatch(fetchExternalAlertmanagersConfigAction());
-        })()
-      ),
-      {
-        errorMessage: 'Failed adding alertmanagers',
-        successMessage: 'Alertmanagers updated',
       }
     );
   }

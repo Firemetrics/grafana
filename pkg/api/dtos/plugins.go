@@ -2,23 +2,24 @@ package dtos
 
 import (
 	"github.com/grafana/grafana/pkg/plugins"
+	"github.com/grafana/grafana/pkg/plugins/pfs"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 )
 
 type PluginSetting struct {
-	Name             string                 `json:"name"`
-	Type             string                 `json:"type"`
-	Id               string                 `json:"id"`
-	Enabled          bool                   `json:"enabled"`
-	Pinned           bool                   `json:"pinned"`
-	Module           string                 `json:"module"`
-	BaseUrl          string                 `json:"baseUrl"`
-	Info             plugins.Info           `json:"info"`
-	Includes         []*plugins.Includes    `json:"includes"`
-	Dependencies     plugins.Dependencies   `json:"dependencies"`
-	JsonData         map[string]interface{} `json:"jsonData"`
-	SecureJsonFields map[string]bool        `json:"secureJsonFields"`
-	DefaultNavUrl    string                 `json:"defaultNavUrl"`
+	Name             string               `json:"name"`
+	Type             string               `json:"type"`
+	Id               string               `json:"id"`
+	Enabled          bool                 `json:"enabled"`
+	Pinned           bool                 `json:"pinned"`
+	Module           string               `json:"module"`
+	BaseUrl          string               `json:"baseUrl"`
+	Info             plugins.Info         `json:"info"`
+	Includes         []*plugins.Includes  `json:"includes"`
+	Dependencies     plugins.Dependencies `json:"dependencies"`
+	JsonData         map[string]any       `json:"jsonData"`
+	SecureJsonFields map[string]bool      `json:"secureJsonFields"`
+	DefaultNavUrl    string               `json:"defaultNavUrl"`
 
 	LatestVersion   string                  `json:"latestVersion"`
 	HasUpdate       bool                    `json:"hasUpdate"`
@@ -27,6 +28,7 @@ type PluginSetting struct {
 	SignatureType   plugins.SignatureType   `json:"signatureType"`
 	SignatureOrg    string                  `json:"signatureOrg"`
 	AngularDetected bool                    `json:"angularDetected"`
+	APIVersion      string                  `json:"apiVersion"`
 }
 
 type PluginListItem struct {
@@ -47,6 +49,8 @@ type PluginListItem struct {
 	SignatureOrg    string                  `json:"signatureOrg"`
 	AccessControl   accesscontrol.Metadata  `json:"accessControl,omitempty"`
 	AngularDetected bool                    `json:"angularDetected"`
+	IAM             *pfs.IAM                `json:"iam,omitempty"`
+	APIVersion      string                  `json:"apiVersion"`
 }
 
 type PluginList []PluginListItem

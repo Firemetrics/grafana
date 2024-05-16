@@ -1,24 +1,22 @@
 ---
-menuTitle: Manage
-description: Manage alert notifications
+canonical: https://grafana.com/docs/grafana/latest/alerting/manage-notifications/
+description: Detect and respond for day-to-day triage and analysis of what’s going on and action you need to take
 keywords:
   - grafana
-  - alert
-  - notifications
-title: Manage your alerts
-weight: 160
+  - detect
+  - respond
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+menuTitle: Detect and respond
+title: Detect and respond
+weight: 130
 ---
 
-# Manage your alerts
+# Detect and respond
 
-Once you have set up your alert rules, contact points, and notification policies, you can use Grafana Alerting to:
+Use Grafana Alerting to track and generate alerts and send notifications, providing an efficient way for engineers to monitor, respond, and triage issues within their services.
 
-[Create silences]({{< relref "./create-silence" >}})
-
-[Create mute timings]({{< relref "./mute-timings" >}})
-
-[Declare incidents from firing alerts]({{< relref "./declare-incident-from-alert" >}})
-
-[View the state and health of alert rules]({{< relref "./view-state-health" >}})
-
-[View and filter alert rules]({{< relref "./view-alert-rules" >}})
+Alerts and alert notifications provide a lot of value as key indicators to issues during the triage process, providing engineers with the information they need to understand what is going on in their system or service.

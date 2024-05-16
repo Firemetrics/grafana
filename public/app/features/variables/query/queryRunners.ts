@@ -8,6 +8,7 @@ import {
   getDefaultTimeRange,
   LoadingState,
   PanelData,
+  QueryVariableModel,
   VariableSupportType,
 } from '@grafana/data';
 
@@ -18,7 +19,6 @@ import {
   hasLegacyVariableSupport,
   hasStandardVariableSupport,
 } from '../guard';
-import { QueryVariableModel } from '../types';
 import { getLegacyQueryOptions } from '../utils';
 
 export interface RunnerArgs {
@@ -83,7 +83,7 @@ class LegacyQueryRunner implements QueryRunner {
       return getEmptyMetricFindValueObservable();
     }
 
-    const queryOptions: any = getLegacyQueryOptions(variable, searchFilter, timeSrv);
+    const queryOptions: any = getLegacyQueryOptions(variable, searchFilter, timeSrv, request.scopedVars);
 
     return from(datasource.metricFindQuery(variable.query, queryOptions)).pipe(
       mergeMap((values) => {
@@ -122,7 +122,7 @@ class StandardQueryRunner implements QueryRunner {
       return runRequest(datasource, request);
     }
 
-    return runRequest(datasource, request, datasource.variables.query);
+    return runRequest(datasource, request, datasource.variables.query.bind(datasource.variables));
   }
 }
 
@@ -146,7 +146,7 @@ class CustomQueryRunner implements QueryRunner {
       return getEmptyMetricFindValueObservable();
     }
 
-    return runRequest(datasource, request, datasource.variables.query);
+    return runRequest(datasource, request, datasource.variables.query.bind(datasource.variables));
   }
 }
 

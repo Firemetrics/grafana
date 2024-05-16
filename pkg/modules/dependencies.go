@@ -1,11 +1,18 @@
 package modules
 
 const (
-	// All includes all modules necessary for Grafana to run as a standalone application.
+	// All includes all modules necessary for Grafana to run as a standalone server
 	All string = "all"
+
+	Core                  string = "core"
+	GrafanaAPIServer      string = "grafana-apiserver"
+	StorageServer         string = "storage-server"
+	InstrumentationServer string = "instrumentation-server"
 )
 
-// dependencyMap defines Module Targets => Dependencies
 var dependencyMap = map[string][]string{
-	All: {},
+	GrafanaAPIServer: {InstrumentationServer},
+	StorageServer:    {InstrumentationServer},
+	Core:             {},
+	All:              {Core},
 }

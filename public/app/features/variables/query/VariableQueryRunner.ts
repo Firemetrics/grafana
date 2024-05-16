@@ -7,9 +7,9 @@ import {
   DataQuery,
   DataQueryRequest,
   DataSourceApi,
-  getDefaultTimeRange,
   LoadingState,
   PanelData,
+  QueryVariableModel,
   ScopedVars,
 } from '@grafana/data';
 
@@ -19,10 +19,9 @@ import { getTimeSrv } from '../../dashboard/services/TimeSrv';
 import { runRequest } from '../../query/state/runRequest';
 import { getLastKey, getVariable } from '../state/selectors';
 import { KeyedVariableIdentifier } from '../state/types';
-import { QueryVariableModel, VariableRefresh } from '../types';
 import { getTemplatedRegex } from '../utils';
 
-import { toMetricFindValues, updateOptionsState, validateVariableSelection } from './operators';
+import { toMetricFindValuesOperator, updateOptionsState, validateVariableSelection } from './operators';
 import { QueryRunners } from './queryRunners';
 
 interface UpdateOptionsArgs {
@@ -134,7 +133,7 @@ export class VariableQueryRunner {
 
             return of(data);
           }),
-          toMetricFindValues(),
+          toMetricFindValuesOperator(),
           updateOptionsState({ variable, dispatch, getTemplatedRegexFunc }),
           validateVariableSelection({ variable, dispatch, searchFilter }),
           takeUntil(
@@ -175,10 +174,7 @@ export class VariableQueryRunner {
     const searchFilterScope = { searchFilter: { text: searchFilter, value: searchFilter } };
     const searchFilterAsVars = searchFilter ? searchFilterScope : {};
     const scopedVars = { ...searchFilterAsVars, ...variableAsVars } as ScopedVars;
-    const range =
-      variable.refresh === VariableRefresh.onTimeRangeChanged
-        ? this.dependencies.getTimeSrv().timeRange()
-        : getDefaultTimeRange();
+    const range = this.dependencies.getTimeSrv().timeRange();
 
     const request: DataQueryRequest = {
       app: CoreApp.Dashboard,

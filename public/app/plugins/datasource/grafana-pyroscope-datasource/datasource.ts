@@ -1,30 +1,32 @@
-import Prism, { Grammar } from 'prismjs';
+import Prism from 'prismjs';
 import { Observable, of } from 'rxjs';
 
 import {
   AbstractQuery,
+  AdHocVariableFilter,
   CoreApp,
   DataQueryRequest,
   DataQueryResponse,
+  DataSourceGetTagKeysOptions,
+  DataSourceGetTagValuesOptions,
   DataSourceInstanceSettings,
+  MetricFindValue,
   ScopedVars,
 } from '@grafana/data';
 import { DataSourceWithBackend, getTemplateSrv, TemplateSrv } from '@grafana/runtime';
 
-import { extractLabelMatchers, toPromLikeExpr } from '../prometheus/language_utils';
+import { VariableSupport } from './VariableSupport';
+import { defaultGrafanaPyroscopeDataQuery, defaultPyroscopeQueryType } from './dataquery.gen';
+import { PyroscopeDataSourceOptions, Query, ProfileTypeMessage } from './types';
+import { addLabelToQuery, extractLabelMatchers, grammar, toPromLikeExpr } from './utils';
 
-import { defaultGrafanaPyroscope, defaultPhlareQueryType } from './dataquery.gen';
-import { PhlareDataSourceOptions, Query, ProfileTypeMessage, BackendType } from './types';
-
-export class PhlareDataSource extends DataSourceWithBackend<Query, PhlareDataSourceOptions> {
-  backendType: BackendType;
-
+export class PyroscopeDataSource extends DataSourceWithBackend<Query, PyroscopeDataSourceOptions> {
   constructor(
-    instanceSettings: DataSourceInstanceSettings<PhlareDataSourceOptions>,
+    instanceSettings: DataSourceInstanceSettings<PyroscopeDataSourceOptions>,
     private readonly templateSrv: TemplateSrv = getTemplateSrv()
   ) {
     super(instanceSettings);
-    this.backendType = instanceSettings.jsonData.backendType ?? 'phlare';
+    this.variables = new VariableSupport(this);
   }
 
   query(request: DataQueryRequest<Query>): Observable<DataQueryResponse> {
@@ -49,27 +51,62 @@ export class PhlareDataSource extends DataSourceWithBackend<Query, PhlareDataSou
     });
   }
 
-  async getProfileTypes(): Promise<ProfileTypeMessage[]> {
-    return await super.getResource('profileTypes');
+  async getProfileTypes(start: number, end: number): Promise<ProfileTypeMessage[]> {
+    return await this.getResource('profileTypes', {
+      start,
+      end,
+    });
+  }
+
+  async getAllProfileTypes(): Promise<ProfileTypeMessage[]> {
+    return await this.getResource('profileTypes');
   }
 
   async getLabelNames(query: string, start: number, end: number): Promise<string[]> {
-    return await super.getResource('labelNames', { query, start, end });
+    return await this.getResource('labelNames', { query: this.templateSrv.replace(query), start, end });
   }
 
   async getLabelValues(query: string, label: string, start: number, end: number): Promise<string[]> {
-    return await super.getResource('labelValues', { label, query, start, end });
+    return await this.getResource('labelValues', {
+      label: this.templateSrv.replace(label),
+      query: this.templateSrv.replace(query),
+      start,
+      end,
+    });
   }
 
-  // We need the URL here because it may not be saved on the backend yet when used from config page.
-  async getBackendType(url: string): Promise<{ backendType: BackendType | 'unknown' }> {
-    return await super.getResource('backendType', { url });
+  // By implementing getTagKeys and getTagValues we add ad-hoc filters functionality
+  async getTagKeys(options: DataSourceGetTagKeysOptions<Query>): Promise<MetricFindValue[]> {
+    const data = this.adhocFilterData(options);
+    const labels = await this.getLabelNames(data.query, data.from, data.to);
+    return labels.map((label) => ({ text: label }));
   }
 
-  applyTemplateVariables(query: Query, scopedVars: ScopedVars): Query {
+  // By implementing getTagKeys and getTagValues we add ad-hoc filters functionality
+  async getTagValues(options: DataSourceGetTagValuesOptions<Query>): Promise<MetricFindValue[]> {
+    const data = this.adhocFilterData(options);
+    const labels = await this.getLabelValues(data.query, options.key, data.from, data.to);
+    return labels.map((label) => ({ text: label }));
+  }
+
+  private adhocFilterData(options: DataSourceGetTagKeysOptions<Query> | DataSourceGetTagValuesOptions<Query>) {
+    const from = options.timeRange?.from.valueOf() ?? Date.now() - 1000 * 60 * 60 * 24;
+    const to = options.timeRange?.to.valueOf() ?? Date.now();
+    const query = '{' + options.filters.map((f) => `${f.key}${f.operator}"${f.value}"`).join(',') + '}';
+    return { from, to, query };
+  }
+
+  applyTemplateVariables(query: Query, scopedVars: ScopedVars, filters?: AdHocVariableFilter[]): Query {
+    let labelSelector = this.templateSrv.replace(query.labelSelector ?? '', scopedVars);
+    if (filters && labelSelector) {
+      for (const filter of filters) {
+        labelSelector = addLabelToQuery(labelSelector, filter.key, filter.value, filter.operator);
+      }
+    }
     return {
       ...query,
-      labelSelector: this.templateSrv.replace(query.labelSelector ?? '', scopedVars),
+      labelSelector,
+      profileTypeId: this.templateSrv.replace(query.profileTypeId ?? '', scopedVars),
     };
   }
 
@@ -80,7 +117,7 @@ export class PhlareDataSource extends DataSourceWithBackend<Query, PhlareDataSou
   importFromAbstractQuery(labelBasedQuery: AbstractQuery): Query {
     return {
       refId: labelBasedQuery.refId,
-      labelSelector: toPromLikeExpr(labelBasedQuery),
+      labelSelector: toPromLikeExpr(labelBasedQuery.labelMatchers),
       queryType: 'both',
       profileTypeId: '',
       groupBy: [],
@@ -92,11 +129,11 @@ export class PhlareDataSource extends DataSourceWithBackend<Query, PhlareDataSou
   }
 
   exportToAbstractQuery(query: Query): AbstractQuery {
-    const phlareQuery = query.labelSelector;
-    if (!phlareQuery || phlareQuery.length === 0) {
+    const pyroscopeQuery = query.labelSelector;
+    if (!pyroscopeQuery || pyroscopeQuery.length === 0) {
       return { refId: query.refId, labelMatchers: [] };
     }
-    const tokens = Prism.tokenize(phlareQuery, grammar);
+    const tokens = Prism.tokenize(pyroscopeQuery, grammar);
     return {
       refId: query.refId,
       labelMatchers: extractLabelMatchers(tokens),
@@ -109,8 +146,8 @@ export class PhlareDataSource extends DataSourceWithBackend<Query, PhlareDataSou
 }
 
 export const defaultQuery: Partial<Query> = {
-  ...defaultGrafanaPyroscope,
-  queryType: defaultPhlareQueryType,
+  ...defaultGrafanaPyroscopeDataQuery,
+  queryType: defaultPyroscopeQueryType,
 };
 
 export function normalizeQuery(query: Query, app?: CoreApp | string) {
@@ -122,27 +159,3 @@ export function normalizeQuery(query: Query, app?: CoreApp | string) {
   }
   return normalized;
 }
-
-const grammar: Grammar = {
-  'context-labels': {
-    pattern: /\{[^}]*(?=}?)/,
-    greedy: true,
-    inside: {
-      comment: {
-        pattern: /#.*/,
-      },
-      'label-key': {
-        pattern: /[a-zA-Z_]\w*(?=\s*(=|!=|=~|!~))/,
-        alias: 'attr-name',
-        greedy: true,
-      },
-      'label-value': {
-        pattern: /"(?:\\.|[^\\"])*"/,
-        greedy: true,
-        alias: 'attr-value',
-      },
-      punctuation: /[{]/,
-    },
-  },
-  punctuation: /[{}(),.]/,
-};

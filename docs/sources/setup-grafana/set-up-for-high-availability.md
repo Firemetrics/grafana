@@ -2,18 +2,28 @@
 aliases:
   - ../administration/set-up-for-high-availability/
   - ../tutorials/ha_setup/
+description: Learn how to set up Grafana to be highly available.
 keywords:
   - grafana
   - tutorials
   - HA
   - high availability
-title: Set up Grafana for high availability
+labels:
+  products:
+    - enterprise
+    - oss
 menuTitle: Set up HA
-description: Learn how to set up Grafana to be highly available.
+title: Set up Grafana for high availability
 weight: 900
 ---
 
 # Set up Grafana for high availability
+
+{{% admonition type="note" %}}
+To prevent duplicate alerts in Grafana high availability, additional steps are required.
+
+Please refer to [Alerting high availability](#alerting-high-availability) for more information.
+{{% /admonition %}}
 
 Grafana uses an embedded sqlite3 database to store users, dashboards, and other persistent data by default. For high availability, you must use a shared database to store this data. This shared database can be either MySQL or Postgres.
 
@@ -31,11 +41,9 @@ Once you have a Postgres or MySQL database available, you can configure your mul
 
 ## Alerting high availability
 
-Grafana Alerting provides a [high availability mode]({{< relref "../alerting/fundamentals/high-availability" >}}).
+Grafana Alerting provides a high availability mode. It preserves the semantics of legacy dashboard alerting by executing all alerts on every server and by sending notifications only once per alert. Load distribution between servers is not supported at this time.
 
-It preserves the semantics of legacy dashboard alerting by executing all alerts on every server and by sending notifications only once per alert. Load distribution between servers is not supported at this time.
-
-For instructions on setting up alerting high availability, refer to [Enable alerting high availability]({{< relref "../alerting/set-up/configure-high-availability" >}}).
+For further information and instructions on setting up alerting high availability, refer to [Enable alerting high availability]({{< relref "../alerting/set-up/configure-high-availability" >}}).
 
 **Legacy dashboard alerts**
 

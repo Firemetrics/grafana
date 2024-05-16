@@ -2,35 +2,43 @@ import { css } from '@emotion/css';
 import React, { useMemo } from 'react';
 
 import { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Field, Select, useStyles2 } from '@grafana/ui';
+import { InlineField, Select, useStyles2 } from '@grafana/ui';
 
+import { useAlertmanager } from '../state/AlertmanagerContext';
 import { AlertManagerDataSource, GRAFANA_RULES_SOURCE_NAME } from '../utils/datasource';
 
 interface Props {
-  onChange: (alertManagerSourceName: string) => void;
-  current?: string;
   disabled?: boolean;
-  dataSources: AlertManagerDataSource[];
+  /**
+   * If true, only show alertmanagers that are receiving alerts from Grafana
+   */
+  showOnlyReceivingGrafanaAlerts?: boolean;
 }
 
 function getAlertManagerLabel(alertManager: AlertManagerDataSource) {
   return alertManager.name === GRAFANA_RULES_SOURCE_NAME ? 'Grafana' : alertManager.name.slice(0, 37);
 }
 
-export const AlertManagerPicker = ({ onChange, current, dataSources, disabled = false }: Props) => {
+export const AlertManagerPicker = ({ disabled = false, showOnlyReceivingGrafanaAlerts }: Props) => {
   const styles = useStyles2(getStyles);
+  const { selectedAlertmanager, availableAlertManagers, setSelectedAlertmanager } = useAlertmanager();
 
   const options: Array<SelectableValue<string>> = useMemo(() => {
-    return dataSources.map((ds) => ({
-      label: getAlertManagerLabel(ds),
-      value: ds.name,
-      imgUrl: ds.imgUrl,
-      meta: ds.meta,
-    }));
-  }, [dataSources]);
+    return availableAlertManagers
+      .filter(({ name, handleGrafanaManagedAlerts }) => {
+        const isReceivingGrafanaAlerts = name === GRAFANA_RULES_SOURCE_NAME || handleGrafanaManagedAlerts;
+        return showOnlyReceivingGrafanaAlerts ? isReceivingGrafanaAlerts : true;
+      })
+      .map((ds) => ({
+        label: getAlertManagerLabel(ds),
+        value: ds.name,
+        imgUrl: ds.imgUrl,
+        meta: ds.meta,
+      }));
+  }, [availableAlertManagers, showOnlyReceivingGrafanaAlerts]);
 
   return (
-    <Field
+    <InlineField
       className={styles.field}
       label={disabled ? 'Alertmanager' : 'Choose Alertmanager'}
       disabled={disabled || options.length === 1}
@@ -41,19 +49,23 @@ export const AlertManagerPicker = ({ onChange, current, dataSources, disabled = 
         width={29}
         className="ds-picker select-container"
         backspaceRemovesValue={false}
-        onChange={(value) => value.value && onChange(value.value)}
+        onChange={(value) => {
+          if (value?.value) {
+            setSelectedAlertmanager(value.value);
+          }
+        }}
         options={options}
         maxMenuHeight={500}
         noOptionsMessage="No datasources found"
-        value={current}
+        value={selectedAlertmanager}
         getOptionLabel={(o) => o.label}
       />
-    </Field>
+    </InlineField>
   );
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  field: css`
-    margin-bottom: ${theme.spacing(4)};
-  `,
+  field: css({
+    margin: 0,
+  }),
 });

@@ -1,6 +1,6 @@
 import { t } from 'i18next';
 import React, { ComponentProps, useCallback, useEffect, useRef, useState } from 'react';
-import { default as ReactSelect } from 'react-select';
+import { default as ReactSelect, IndicatorsContainerProps, Props as ReactSelectProps } from 'react-select';
 import { default as ReactAsyncSelect } from 'react-select/async';
 import { default as AsyncCreatable } from 'react-select/async-creatable';
 import Creatable from 'react-select/creatable';
@@ -11,6 +11,7 @@ import { useTheme2 } from '../../themes';
 import { Icon } from '../Icon/Icon';
 import { Spinner } from '../Spinner/Spinner';
 
+import { CustomInput } from './CustomInput';
 import { DropdownIndicator } from './DropdownIndicator';
 import { IndicatorsContainer } from './IndicatorsContainer';
 import { InputControl } from './InputControl';
@@ -24,31 +25,6 @@ import { getSelectStyles } from './getSelectStyles';
 import { useCustomSelectStyles } from './resetSelectStyles';
 import { ActionMeta, InputActionMeta, SelectBaseProps } from './types';
 import { cleanValue, findSelectedValue, omitDescriptions } from './utils';
-
-interface ExtraValuesIndicatorProps {
-  maxVisibleValues?: number | undefined;
-  selectedValuesCount: number;
-  menuIsOpen: boolean;
-  showAllSelectedWhenOpen: boolean;
-}
-
-const renderExtraValuesIndicator = (props: ExtraValuesIndicatorProps) => {
-  const { maxVisibleValues, selectedValuesCount, menuIsOpen, showAllSelectedWhenOpen } = props;
-
-  if (
-    maxVisibleValues !== undefined &&
-    selectedValuesCount > maxVisibleValues &&
-    !(showAllSelectedWhenOpen && menuIsOpen)
-  ) {
-    return (
-      <span key="excess-values" id="excess-values">
-        (+{selectedValuesCount - maxVisibleValues})
-      </span>
-    );
-  }
-
-  return null;
-};
 
 const CustomControl = (props: any) => {
   const {
@@ -88,10 +64,17 @@ const CustomControl = (props: any) => {
   );
 };
 
-export function SelectBase<T>({
+interface SelectPropsWithExtras extends ReactSelectProps {
+  maxVisibleValues?: number | undefined;
+  showAllSelectedWhenOpen: boolean;
+  noMultiValueWrap?: boolean;
+}
+
+export function SelectBase<T, Rest = {}>({
   allowCustomValue = false,
   allowCreateWhileLoading = false,
   'aria-label': ariaLabel,
+  'data-testid': dataTestid,
   autoFocus = false,
   backspaceRemovesValue = true,
   blurInputOnSelect,
@@ -145,11 +128,13 @@ export function SelectBase<T>({
   tabSelectsValue = true,
   value,
   virtualized = false,
+  noMultiValueWrap,
   width,
   isValidNewOption,
   formatOptionLabel,
   hideSelectedOptions,
-}: SelectBaseProps<T>) {
+  ...rest
+}: SelectBaseProps<T> & Rest) {
   const theme = useTheme2();
   const styles = getSelectStyles(theme);
 
@@ -201,7 +186,7 @@ export function SelectBase<T>({
         const selectableValue = findSelectedValue(v.value ?? v, options);
         // If the select allows custom values there likely won't be a selectableValue in options
         // so we must return a new selectableValue
-        if (!allowCustomValue || selectableValue) {
+        if (selectableValue) {
           return selectableValue;
         }
         return typeof v === 'string' ? toOption(v) : v;
@@ -216,6 +201,7 @@ export function SelectBase<T>({
 
   const commonSelectProps = {
     'aria-label': ariaLabel,
+    'data-testid': dataTestid,
     autoFocus,
     backspaceRemovesValue,
     blurInputOnSelect,
@@ -255,8 +241,13 @@ export function SelectBase<T>({
     onBlur,
     onChange: onChangeWithEmpty,
     onInputChange: (val: string, actionMeta: InputActionMeta) => {
-      setHasInputValue(!!val);
-      onInputChange?.(val, actionMeta);
+      const newValue = onInputChange?.(val, actionMeta) ?? val;
+      const newHasValue = !!newValue;
+      if (newHasValue !== hasInputValue) {
+        setHasInputValue(newHasValue);
+      }
+
+      return newValue;
     },
     onKeyDown,
     onMenuClose: onCloseMenu,
@@ -273,6 +264,7 @@ export function SelectBase<T>({
     showAllSelectedWhenOpen,
     tabSelectsValue,
     value: isMulti ? selectedValue : selectedValue?.[0],
+    noMultiValueWrap,
   };
 
   if (allowCustomValue) {
@@ -286,7 +278,7 @@ export function SelectBase<T>({
 
   // Instead of having AsyncSelect, as a separate component we render ReactAsyncSelect
   if (loadOptions) {
-    ReactSelectComponent = (allowCustomValue ? AsyncCreatable : ReactAsyncSelect) as any;
+    ReactSelectComponent = allowCustomValue ? AsyncCreatable : ReactAsyncSelect;
     asyncSelectProps = {
       loadOptions,
       cacheOptions,
@@ -304,31 +296,8 @@ export function SelectBase<T>({
           MenuList: SelectMenuComponent,
           Group: SelectOptionGroup,
           ValueContainer,
-          IndicatorsContainer(props: any) {
-            const { selectProps } = props;
-            const { value, showAllSelectedWhenOpen, maxVisibleValues, menuIsOpen } = selectProps;
-
-            if (maxVisibleValues !== undefined) {
-              const selectedValuesCount = value.length;
-              const indicatorChildren = [...props.children];
-              indicatorChildren.splice(
-                -1,
-                0,
-                renderExtraValuesIndicator({
-                  maxVisibleValues,
-                  selectedValuesCount,
-                  showAllSelectedWhenOpen,
-                  menuIsOpen,
-                })
-              );
-              return <IndicatorsContainer {...props}>{indicatorChildren}</IndicatorsContainer>;
-            }
-
-            return <IndicatorsContainer {...props} />;
-          },
-          IndicatorSeparator() {
-            return <></>;
-          },
+          IndicatorsContainer: CustomIndicatorsContainer,
+          IndicatorSeparator: IndicatorSeparator,
           Control: CustomControl,
           Option: SelectMenuOptions,
           ClearIndicator(props: any) {
@@ -360,15 +329,14 @@ export function SelectBase<T>({
               </div>
             );
           },
-          DropdownIndicator(props) {
-            return <DropdownIndicator isOpen={props.selectProps.menuIsOpen} />;
-          },
+          DropdownIndicator: DropdownIndicator,
           SingleValue(props: any) {
             return <SingleValue {...props} isDisabled={disabled} />;
           },
           SelectContainer,
           MultiValueContainer: MultiValueContainer,
           MultiValueRemove: !disabled ? MultiValueRemove : () => null,
+          Input: CustomInput,
           ...components,
         }}
         styles={selectStyles}
@@ -376,6 +344,7 @@ export function SelectBase<T>({
         {...commonSelectProps}
         {...creatableProps}
         {...asyncSelectProps}
+        {...rest}
       />
     </>
   );
@@ -391,4 +360,38 @@ function defaultFormatCreateLabel(input: string) {
       </div>
     </div>
   );
+}
+
+type CustomIndicatorsContainerProps = IndicatorsContainerProps & {
+  selectProps: SelectPropsWithExtras;
+  children: React.ReactNode;
+};
+
+function CustomIndicatorsContainer(props: CustomIndicatorsContainerProps) {
+  const { showAllSelectedWhenOpen, maxVisibleValues, menuIsOpen } = props.selectProps;
+
+  const value = props.getValue();
+
+  if (maxVisibleValues !== undefined && Array.isArray(props.children)) {
+    const selectedValuesCount = value.length;
+
+    if (selectedValuesCount > maxVisibleValues && !(showAllSelectedWhenOpen && menuIsOpen)) {
+      const indicatorChildren = [...props.children];
+      indicatorChildren.splice(
+        -1,
+        0,
+        <span key="excess-values" id="excess-values">
+          (+{selectedValuesCount - maxVisibleValues})
+        </span>
+      );
+
+      return <IndicatorsContainer {...props}>{indicatorChildren}</IndicatorsContainer>;
+    }
+  }
+
+  return <IndicatorsContainer {...props} />;
+}
+
+function IndicatorSeparator() {
+  return <></>;
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana/pkg/services/auth/identity"
 	"github.com/grafana/grafana/pkg/services/user"
 )
 
@@ -110,6 +111,62 @@ func TestClearCookieHeader(t *testing.T) {
 		require.Contains(t, req.Header, "Cookie")
 		require.Equal(t, "cookie1=", req.Header.Get("Cookie"))
 	})
+
+	t.Run("Clear cookie header with cookies to keep should clear Cookie header and keep cookies with optional matching", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: "cookie1"})
+		req.AddCookie(&http.Cookie{Name: "cookie3"})
+
+		ClearCookieHeader(req, []string{"cookie[]"}, nil)
+		require.Contains(t, req.Header, "Cookie")
+		require.Equal(t, "cookie1=; cookie3=", req.Header.Get("Cookie"))
+	})
+
+	t.Run("Clear cookie header with cookies to keep should clear Cookie header and keep cookies with matching pattern but with empty matching option", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: "cookie1"})
+		req.AddCookie(&http.Cookie{Name: "cookie2"})
+		req.AddCookie(&http.Cookie{Name: "cookie3"})
+
+		ClearCookieHeader(req, []string{"cookie[]"}, []string{"cookie2"})
+		require.Contains(t, req.Header, "Cookie")
+		require.Equal(t, "cookie1=; cookie3=", req.Header.Get("Cookie"))
+	})
+
+	t.Run("Clear cookie header with cookie match pattern to keep and skip should clear Cookie header and keep cookies", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: "cook1"})
+		req.AddCookie(&http.Cookie{Name: "special23"})
+		req.AddCookie(&http.Cookie{Name: "special_1asd987dsf9a"})
+		req.AddCookie(&http.Cookie{Name: "c00k1e"})
+
+		ClearCookieHeader(req, []string{"special_[]"}, nil)
+		require.Contains(t, req.Header, "Cookie")
+		require.Equal(t, "special_1asd987dsf9a=", req.Header.Get("Cookie"))
+	})
+
+	t.Run("Clear cookie header with cookie should not match BAD pattern and return no cookies", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: "cookie1"})
+		req.AddCookie(&http.Cookie{Name: "special23"})
+
+		ClearCookieHeader(req, []string{"[]cookie"}, nil)
+		require.NotContains(t, req.Header, "Cookie")
+	})
+
+	t.Run("Clear cookie header with cookie should match all cookies when keepCookies is *", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: "cookie1"})
+		req.AddCookie(&http.Cookie{Name: "special23"})
+
+		ClearCookieHeader(req, []string{"[]"}, nil)
+		require.Equal(t, "cookie1=; special23=", req.Header.Get("Cookie"))
+	})
 }
 
 func TestApplyUserHeader(t *testing.T) {
@@ -118,7 +175,7 @@ func TestApplyUserHeader(t *testing.T) {
 		require.NoError(t, err)
 		req.Header.Set("X-Grafana-User", "admin")
 
-		ApplyUserHeader(false, req, &user.SignedInUser{Login: "admin"})
+		ApplyUserHeader(false, req, &user.SignedInUser{Login: "admin", NamespacedID: identity.MustParseNamespaceID("user:1")})
 		require.NotContains(t, req.Header, "X-Grafana-User")
 	})
 
@@ -135,7 +192,7 @@ func TestApplyUserHeader(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "/", nil)
 		require.NoError(t, err)
 
-		ApplyUserHeader(true, req, &user.SignedInUser{IsAnonymous: true})
+		ApplyUserHeader(true, req, &user.SignedInUser{IsAnonymous: true, NamespacedID: identity.MustParseNamespaceID("anonymous:0")})
 		require.NotContains(t, req.Header, "X-Grafana-User")
 	})
 
@@ -143,7 +200,7 @@ func TestApplyUserHeader(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "/", nil)
 		require.NoError(t, err)
 
-		ApplyUserHeader(true, req, &user.SignedInUser{Login: "admin"})
+		ApplyUserHeader(true, req, &user.SignedInUser{Login: "admin", NamespacedID: identity.MustParseNamespaceID("user:1")})
 		require.Equal(t, "admin", req.Header.Get("X-Grafana-User"))
 	})
 }

@@ -1,26 +1,6 @@
 import { CloudNotifierType, NotificationChannelOption, NotifierDTO } from 'app/types';
 
-function option(
-  propertyName: string,
-  label: string,
-  description: string,
-  rest: Partial<NotificationChannelOption> = {}
-): NotificationChannelOption {
-  return {
-    propertyName,
-    label,
-    description,
-    element: 'input',
-    inputType: '',
-    required: false,
-    secure: false,
-    placeholder: '',
-    validationRule: '',
-    showWhen: { field: '', is: '' },
-    dependsOn: '',
-    ...rest,
-  };
-}
+import { option } from './notifier-types';
 
 const basicAuthOption: NotificationChannelOption = option(
   'basic_auth',
@@ -49,6 +29,25 @@ const tlsConfigOption: NotificationChannelOption = option('tls_config', 'TLS con
   ],
 });
 
+const oauth2ConfigOption: NotificationChannelOption = option('oauth2', 'OAuth2', 'Configures the OAuth2 settings.', {
+  element: 'subform',
+  subformOptions: [
+    option('client_id', 'Client ID', 'The OAuth2 client ID', { required: true }),
+    option('client_secret', 'Client secret', 'The OAuth2 client secret', { required: true }),
+    // ths "client_secret_file" is not allowed for security reasons in Mimir / Cloud Alertmanager so we also disable it for OSS Alertmanager – sorry!
+    // option(
+    //   'client_secret_file',
+    //   'Client secret file',
+    //   'OAuth2 client secret file location. Mutually exclusive with client_secret.',
+    // ),
+    option('token_url', 'Token URL', 'The OAuth2 token exchange URL', { required: true }),
+    option('scopes', 'Scopes', 'Comma-separated list of scopes', {
+      element: 'string_array',
+    }),
+    option('endpoint_params', 'Additional parameters', '', { element: 'key_value_map' }),
+  ],
+});
+
 const httpConfigOption: NotificationChannelOption = option(
   'http_config',
   'HTTP Config',
@@ -65,6 +64,7 @@ const httpConfigOption: NotificationChannelOption = option(
       option('proxy_url', 'Proxy URL', 'Optional proxy URL.'),
       basicAuthOption,
       tlsConfigOption,
+      oauth2ConfigOption,
     ],
   }
 );
@@ -193,6 +193,16 @@ export const cloudNotifierTypes: Array<NotifierDTO<CloudNotifierType>> = [
         'How long your notification will continue to be retried for, unless the user acknowledges the notification.',
         {
           placeholder: '1h',
+        }
+      ),
+      option(
+        'ttl',
+        'TTL',
+        'The number of seconds before a message expires and is deleted automatically. Examples: 10s, 5m30s, 8h.',
+        {
+          // allow 30s, 4m30s, etc
+          validationRule: '^(\\d+[s|m|h])+$|^$',
+          element: 'input',
         }
       ),
       httpConfigOption,
@@ -330,7 +340,15 @@ export const cloudNotifierTypes: Array<NotifierDTO<CloudNotifierType>> = [
         'max_alerts',
         'Max alerts',
         'The maximum number of alerts to include in a single webhook message. Alerts above this threshold are truncated. When leaving this at its default value of 0, all alerts are included.',
-        { placeholder: '0', validationRule: '(^\\d+$|^$)' }
+        {
+          placeholder: '0',
+          inputType: 'number',
+          validationRule: '(^\\d+$|^$)',
+          setValueAs: (value) => {
+            const integer = Number(value);
+            return Number.isFinite(integer) ? integer : 0;
+          },
+        }
       ),
       httpConfigOption,
     ],
@@ -508,6 +526,22 @@ export const cloudNotifierTypes: Array<NotifierDTO<CloudNotifierType>> = [
       }),
       option('to_tag', 'to tag', '', {
         placeholder: '{{ template "wechat.default.to_tag" . }}',
+      }),
+    ],
+  },
+  {
+    name: 'Microsoft Teams',
+    description: 'Sends notifications to Microsoft Teams',
+    type: 'msteams',
+    info: '',
+    heading: 'Microsoft Teams settings',
+    options: [
+      option('webhook_url', 'Webhook URL', 'The incoming webhook URL.'),
+      option('title', 'Title', 'Message title template.', {
+        placeholder: '{{ template "teams.default.title" . }}',
+      }),
+      option('text', 'Text', 'Message body template.', {
+        placeholder: '{{ template "teams.default.text" . }}',
       }),
     ],
   },

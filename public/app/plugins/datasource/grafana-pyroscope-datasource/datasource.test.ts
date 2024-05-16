@@ -1,18 +1,53 @@
-import { AbstractLabelOperator, CoreApp, DataSourceInstanceSettings, PluginMetaInfo, PluginType } from '@grafana/data';
-import { TemplateSrv } from 'app/features/templating/template_srv';
+import {
+  AbstractLabelOperator,
+  CoreApp,
+  DataSourceInstanceSettings,
+  PluginMetaInfo,
+  PluginType,
+  DataSourceJsonData,
+  makeTimeRange,
+} from '@grafana/data';
+import { setPluginExtensionsHook, getBackendSrv, setBackendSrv, TemplateSrv } from '@grafana/runtime';
 
-import { defaultPhlareQueryType } from './dataquery.gen';
-import { normalizeQuery, PhlareDataSource } from './datasource';
+import { defaultPyroscopeQueryType } from './dataquery.gen';
+import { normalizeQuery, PyroscopeDataSource } from './datasource';
 import { Query } from './types';
 
-describe('Phlare data source', () => {
-  let ds: PhlareDataSource;
-  beforeEach(() => {
-    ds = new PhlareDataSource(defaultSettings);
+/** The datasource QueryEditor fetches datasource settings to send to the extension's `configure` method */
+export function mockFetchPyroscopeDatasourceSettings(
+  datasourceSettings?: Partial<DataSourceInstanceSettings<DataSourceJsonData>>
+) {
+  const settings = { ...defaultSettings, ...datasourceSettings };
+  const returnValues: Record<string, unknown> = {
+    [`/api/datasources/uid/${settings.uid}`]: settings,
+  };
+  setBackendSrv({
+    ...getBackendSrv(),
+    get: function <T>(path: string) {
+      const value = returnValues[path];
+      if (value) {
+        return Promise.resolve(value as T);
+      }
+      return Promise.reject({ message: 'reject' });
+    },
   });
+}
 
+function setupDatasource() {
+  mockFetchPyroscopeDatasourceSettings();
+  setPluginExtensionsHook(() => ({ extensions: [], isLoading: false })); // No extensions
+  const templateSrv = {
+    replace: (query: string): string => {
+      return query.replace(/\$var/g, 'interpolated');
+    },
+  } as unknown as TemplateSrv;
+  return new PyroscopeDataSource(defaultSettings, templateSrv);
+}
+
+describe('Pyroscope data source', () => {
   describe('importing queries', () => {
     it('keeps all labels and values', async () => {
+      const ds = setupDatasource();
       const queries = await ds.importFromAbstractQueries([
         {
           refId: 'A',
@@ -28,6 +63,7 @@ describe('Phlare data source', () => {
 
   describe('exporting queries', () => {
     it('keeps all labels and values', async () => {
+      const ds = setupDatasource();
       const queries = await ds.exportToAbstractQueries([
         {
           refId: 'A',
@@ -50,33 +86,47 @@ describe('Phlare data source', () => {
   });
 
   describe('applyTemplateVariables', () => {
-    const interpolationVar = '$interpolationVar';
-    const interpolationText = 'interpolationText';
-    const noInterpolation = 'noInterpolation';
-
     it('should not update labelSelector if there are no template variables', () => {
-      const templateSrv = new TemplateSrv();
-      templateSrv.replace = jest.fn((query: string): string => {
-        return query.replace(/\$interpolationVar/g, interpolationText);
+      const ds = setupDatasource();
+      const query = ds.applyTemplateVariables(defaultQuery({ labelSelector: `no var`, profileTypeId: 'no var' }), {});
+      expect(query).toMatchObject({
+        labelSelector: `no var`,
+        profileTypeId: 'no var',
       });
-      ds = new PhlareDataSource(defaultSettings, templateSrv);
-      const query = ds.applyTemplateVariables(defaultQuery(`{${noInterpolation}}`), {});
-      expect(templateSrv.replace).toBeCalledTimes(1);
-      expect(query.labelSelector).toBe(`{${noInterpolation}}`);
     });
 
     it('should update labelSelector if there are template variables', () => {
-      const templateSrv = new TemplateSrv();
-      templateSrv.replace = jest.fn((query: string): string => {
-        return query.replace(/\$interpolationVar/g, interpolationText);
-      });
-      ds = new PhlareDataSource(defaultSettings, templateSrv);
-      const query = ds.applyTemplateVariables(defaultQuery(`{${interpolationVar}="${interpolationVar}"}`), {
-        interpolationVar: { text: interpolationText, value: interpolationText },
-      });
-      expect(templateSrv.replace).toBeCalledTimes(1);
-      expect(query.labelSelector).toBe(`{${interpolationText}="${interpolationText}"}`);
+      const ds = setupDatasource();
+      const query = ds.applyTemplateVariables(
+        defaultQuery({ labelSelector: `{$var="$var"}`, profileTypeId: '$var' }),
+        {}
+      );
+      expect(query).toMatchObject({ labelSelector: `{interpolated="interpolated"}`, profileTypeId: 'interpolated' });
     });
+  });
+
+  it('implements ad hoc variable support for keys', async () => {
+    const ds = setupDatasource();
+    jest.spyOn(ds, 'getResource').mockImplementationOnce(async (cb) => ['foo', 'bar', 'baz']);
+    const keys = await ds.getTagKeys({
+      filters: [],
+      timeRange: makeTimeRange('2024-01-01T00:00:00', '2024-01-01T01:00:00'),
+    });
+    expect(keys).toEqual(['foo', 'bar', 'baz'].map((v) => ({ text: v })));
+  });
+
+  it('implements ad hoc variable support for values', async () => {
+    const ds = setupDatasource();
+    jest.spyOn(ds, 'getResource').mockImplementationOnce(async (path, params) => {
+      expect(params?.label).toEqual('foo');
+      return ['xyz', 'tuv'];
+    });
+    const keys = await ds.getTagValues({
+      key: 'foo',
+      filters: [],
+      timeRange: makeTimeRange('2024-01-01T00:00:00', '2024-01-01T01:00:00'),
+    });
+    expect(keys).toEqual(['xyz', 'tuv'].map((v) => ({ text: v })));
   });
 });
 
@@ -116,25 +166,26 @@ describe('normalizeQuery', () => {
   });
 });
 
-const defaultQuery = (query: string) => {
+const defaultQuery = (query: Partial<Query>): Query => {
   return {
     refId: 'x',
     groupBy: [],
-    labelSelector: query,
+    labelSelector: '',
     profileTypeId: '',
-    queryType: defaultPhlareQueryType,
+    queryType: defaultPyroscopeQueryType,
+    ...query,
   };
 };
 
 const defaultSettings: DataSourceInstanceSettings = {
   id: 0,
-  uid: 'phlare',
+  uid: 'pyroscope',
   type: 'profiling',
-  name: 'phlare',
+  name: 'pyroscope',
   access: 'proxy',
   meta: {
-    id: 'phlare',
-    name: 'phlare',
+    id: 'pyroscope',
+    name: 'pyroscope',
     type: PluginType.datasource,
     info: {} as PluginMetaInfo,
     module: '',

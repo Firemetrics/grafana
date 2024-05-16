@@ -15,9 +15,10 @@ import {
   LogsVolumeType,
   SupplementaryQueryType,
 } from '@grafana/data';
-import { makeDataFramesForLogs } from 'app/core/logsModel';
 import store from 'app/core/store';
 import { ExplorePanelData, SupplementaryQueries } from 'app/types';
+
+import { makeDataFramesForLogs, queryLogsSample, queryLogsVolume } from '../../logs/logsModel';
 
 export const supplementaryQueryTypes: SupplementaryQueryType[] = [
   SupplementaryQueryType.LogsVolume,
@@ -129,7 +130,19 @@ export const getSupplementaryQueryProvider = (
     dsRequest.targets = targets;
 
     if (hasSupplementaryQuerySupport(datasource, type)) {
-      return datasource.getDataProvider(type, dsRequest);
+      if (datasource.getDataProvider) {
+        return datasource.getDataProvider(type, dsRequest);
+      } else if (datasource.getSupplementaryRequest) {
+        const request = datasource.getSupplementaryRequest(type, dsRequest);
+        if (!request) {
+          return undefined;
+        }
+        return type === SupplementaryQueryType.LogsVolume
+          ? queryLogsVolume(datasource, request, { targets: dsRequest.targets })
+          : queryLogsSample(datasource, request);
+      } else {
+        return undefined;
+      }
     } else {
       return getSupplementaryQueryFallback(type, explorePanelData, targets, datasource.name);
     }

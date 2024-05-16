@@ -4,18 +4,20 @@ import { parseLegacyLogsFrame } from './legacyLogsFrame';
 
 // these are like Labels, but their values can be
 // arbitrary structures, not just strings
-export type Attributes = Record<string, unknown>;
+export type LogFrameLabels = Record<string, unknown>;
 
 // the attributes-access is a little awkward, but it's necessary
-// because there are multiple,very different dataframe-represenations.
+// because there are multiple,very different dataFrame-representations.
 export type LogsFrame = {
   timeField: FieldWithIndex;
   bodyField: FieldWithIndex;
   timeNanosecondField: FieldWithIndex | null;
   severityField: FieldWithIndex | null;
   idField: FieldWithIndex | null;
-  attributes: Attributes[] | null;
-  getAttributesAsLabels: () => Labels[] | null; // temporarily exists to make the labels=>attributes migration simpler
+  getLogFrameLabels: () => LogFrameLabels[] | null; // may be slow, so we only do it when asked for it explicitly
+  getLogFrameLabelsAsLabels: () => Labels[] | null; // temporarily exists to make the labels=>attributes migration simpler
+  getLabelFieldName: () => string | null;
+  extraFields: FieldWithIndex[];
 };
 
 function getField(cache: FieldCache, name: string, fieldType: FieldType): FieldWithIndex | undefined {
@@ -31,12 +33,12 @@ const DATAPLANE_TIMESTAMP_NAME = 'timestamp';
 const DATAPLANE_BODY_NAME = 'body';
 const DATAPLANE_SEVERITY_NAME = 'severity';
 const DATAPLANE_ID_NAME = 'id';
-const DATAPLANE_ATTRIBUTES_NAME = 'attributes';
+const DATAPLANE_LABELS_NAME = 'labels';
 
-export function attributesToLabels(attributes: Attributes): Labels {
+export function logFrameLabelsToLabels(logFrameLabels: LogFrameLabels): Labels {
   const result: Labels = {};
 
-  Object.entries(attributes).forEach(([k, v]) => {
+  Object.entries(logFrameLabels).forEach(([k, v]) => {
     result[k] = typeof v === 'string' ? v : JSON.stringify(v);
   });
 
@@ -56,20 +58,30 @@ function parseDataplaneLogsFrame(frame: DataFrame): LogsFrame | null {
 
   const severityField = getField(cache, DATAPLANE_SEVERITY_NAME, FieldType.string) ?? null;
   const idField = getField(cache, DATAPLANE_ID_NAME, FieldType.string) ?? null;
-  const attributesField = getField(cache, DATAPLANE_ATTRIBUTES_NAME, FieldType.other) ?? null;
+  const labelsField = getField(cache, DATAPLANE_LABELS_NAME, FieldType.other) ?? null;
 
-  const attributes = attributesField === null ? null : attributesField.values;
+  const labels = labelsField === null ? null : labelsField.values;
+
+  const extraFields = cache.fields.filter(
+    (_, i) =>
+      i !== timestampField.index &&
+      i !== bodyField.index &&
+      i !== severityField?.index &&
+      i !== idField?.index &&
+      i !== labelsField?.index
+  );
 
   return {
     timeField: timestampField,
     bodyField,
     severityField,
     idField,
-    attributes,
+    getLogFrameLabels: () => labels,
     timeNanosecondField: null,
-    getAttributesAsLabels: () => (attributes !== null ? attributes.map(attributesToLabels) : null),
+    getLogFrameLabelsAsLabels: () => (labels !== null ? labels.map(logFrameLabelsToLabels) : null),
+    getLabelFieldName: () => (labelsField !== null ? labelsField.name : null),
+    extraFields,
   };
-  return null;
 }
 
 export function parseLogsFrame(frame: DataFrame): LogsFrame | null {

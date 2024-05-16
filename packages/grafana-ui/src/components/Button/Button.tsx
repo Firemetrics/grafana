@@ -1,11 +1,11 @@
-import { css, CSSObject, cx } from '@emotion/css';
+import { css, cx } from '@emotion/css';
 import React, { AnchorHTMLAttributes, ButtonHTMLAttributes } from 'react';
 
 import { GrafanaTheme2, ThemeRichColor } from '@grafana/data';
 
 import { useTheme2 } from '../../themes';
 import { getFocusStyles, getMouseFocusStyles } from '../../themes/mixins';
-import { ComponentSize } from '../../types';
+import { ComponentSize, IconSize, IconType } from '../../types';
 import { IconName } from '../../types/icon';
 import { getPropertiesForButtonSize } from '../Forms/commonStyles';
 import { Icon } from '../Icon/Icon';
@@ -20,7 +20,7 @@ type CommonProps = {
   size?: ComponentSize;
   variant?: ButtonVariant;
   fill?: ButtonFill;
-  icon?: IconName;
+  icon?: IconName | React.ReactElement;
   className?: string;
   children?: React.ReactNode;
   fullWidth?: boolean;
@@ -64,7 +64,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // When using tooltip, ref is forwarded to Tooltip component instead for https://github.com/grafana/grafana/issues/65632
     const button = (
       <button className={cx(styles.button, className)} type={type} {...otherProps} ref={tooltip ? undefined : ref}>
-        {icon && <Icon name={icon} size={size} className={styles.icon} />}
+        <IconRenderer icon={icon} size={size} className={styles.icon} />
         {children && <span className={styles.content}>{children}</span>}
       </button>
     );
@@ -83,7 +83,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
 Button.displayName = 'Button';
 
-type ButtonLinkProps = CommonProps & ButtonHTMLAttributes<HTMLButtonElement> & AnchorHTMLAttributes<HTMLAnchorElement>;
+export type ButtonLinkProps = CommonProps &
+  ButtonHTMLAttributes<HTMLButtonElement> &
+  AnchorHTMLAttributes<HTMLAnchorElement>;
 
 export const LinkButton = React.forwardRef<HTMLAnchorElement, ButtonLinkProps>(
   (
@@ -126,8 +128,14 @@ export const LinkButton = React.forwardRef<HTMLAnchorElement, ButtonLinkProps>(
 
     // When using tooltip, ref is forwarded to Tooltip component instead for https://github.com/grafana/grafana/issues/65632
     const button = (
-      <a className={linkButtonStyles} {...otherProps} tabIndex={disabled ? -1 : 0} ref={tooltip ? undefined : ref}>
-        {icon && <Icon name={icon} size={size} className={styles.icon} />}
+      <a
+        className={linkButtonStyles}
+        {...otherProps}
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        ref={tooltip ? undefined : ref}
+      >
+        <IconRenderer icon={icon} size={size} className={styles.icon} />
         {children && <span className={styles.content}>{children}</span>}
       </a>
     );
@@ -145,6 +153,25 @@ export const LinkButton = React.forwardRef<HTMLAnchorElement, ButtonLinkProps>(
 );
 
 LinkButton.displayName = 'LinkButton';
+
+interface IconRendererProps {
+  icon?: IconName | React.ReactElement<{ className?: string; size?: IconSize }>;
+  size?: IconSize;
+  className?: string;
+  iconType?: IconType;
+}
+export const IconRenderer = ({ icon, size, className, iconType }: IconRendererProps) => {
+  if (!icon) {
+    return null;
+  }
+  if (React.isValidElement(icon)) {
+    return React.cloneElement(icon, {
+      className,
+      size,
+    });
+  }
+  return <Icon name={icon} size={size} className={className} type={iconType} />;
+};
 
 export interface StyleProps {
   size: ComponentSize;
@@ -191,11 +218,11 @@ export const getButtonStyles = (props: StyleProps) => {
       '&[disabled]': disabledStyles,
     }),
     disabled: css(disabledStyles),
-    img: css`
-      width: 16px;
-      height: 16px;
-      margin: ${theme.spacing(0, 1, 0, 0.5)};
-    `,
+    img: css({
+      width: '16px',
+      height: '16px',
+      margin: theme.spacing(0, 1, 0, 0.5),
+    }),
     icon: iconOnly
       ? css({
           // Important not to set margin bottom here as it would override internal icon bottom margin
@@ -205,17 +232,18 @@ export const getButtonStyles = (props: StyleProps) => {
       : css({
           marginRight: theme.spacing(padding / 2),
         }),
-    content: css`
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      white-space: nowrap;
-      height: 100%;
-    `,
+    content: css({
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      height: '100%',
+    }),
   };
 };
 
-function getButtonVariantStyles(theme: GrafanaTheme2, color: ThemeRichColor, fill: ButtonFill): CSSObject {
+function getButtonVariantStyles(theme: GrafanaTheme2, color: ThemeRichColor, fill: ButtonFill) {
   let outlineBorderColor = color.border;
   let borderColor = 'transparent';
   let hoverBorderColor = 'transparent';
@@ -284,7 +312,7 @@ function getButtonVariantStyles(theme: GrafanaTheme2, color: ThemeRichColor, fil
 }
 
 function getPropertiesForDisabled(theme: GrafanaTheme2, variant: ButtonVariant, fill: ButtonFill) {
-  const disabledStyles: CSSObject = {
+  const disabledStyles = {
     cursor: 'not-allowed',
     boxShadow: 'none',
     color: theme.colors.text.disabled,
@@ -333,25 +361,25 @@ export function getPropertiesForVariant(theme: GrafanaTheme2, variant: ButtonVar
 }
 
 export const clearButtonStyles = (theme: GrafanaTheme2) => {
-  return css`
-    background: transparent;
-    color: ${theme.colors.text.primary};
-    border: none;
-    padding: 0;
-  `;
+  return css({
+    background: 'transparent',
+    color: theme.colors.text.primary,
+    border: 'none',
+    padding: 0,
+  });
 };
 
 export const clearLinkButtonStyles = (theme: GrafanaTheme2) => {
-  return css`
-    background: transparent;
-    border: none;
-    padding: 0;
-    font-family: inherit;
-    color: inherit;
-    height: 100%;
-    &:hover {
-      background: transparent;
-      color: inherit;
-    }
-  `;
+  return css({
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    fontFamily: 'inherit',
+    color: 'inherit',
+    height: '100%',
+    '&:hover': {
+      background: 'transparent',
+      color: 'inherit',
+    },
+  });
 };

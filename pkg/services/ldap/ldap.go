@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/login"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
+	"github.com/grafana/grafana/pkg/util"
 )
 
 // IConnection is interface for LDAP connection manipulation
@@ -99,7 +100,7 @@ func (server *Server) Dial() error {
 	var certPool *x509.CertPool
 	if server.Config.RootCACert != "" {
 		certPool = x509.NewCertPool()
-		for _, caCertFile := range strings.Split(server.Config.RootCACert, " ") {
+		for _, caCertFile := range util.SplitString(server.Config.RootCACert) {
 			// nolint:gosec
 			// We can ignore the gosec G304 warning on this one because `caCertFile` comes from ldap config.
 			pem, err := os.ReadFile(caCertFile)
@@ -288,8 +289,8 @@ func (server *Server) Users(logins []string) (
 ) {
 	var users [][]*ldap.Entry
 	err := getUsersIteration(logins, func(previous, current int) error {
-		var err error
-		users, err = server.users(logins[previous:current])
+		iterationUsers, err := server.users(logins[previous:current])
+		users = append(users, iterationUsers...)
 		return err
 	})
 	if err != nil {
@@ -306,7 +307,7 @@ func (server *Server) Users(logins []string) (
 	}
 
 	server.log.Debug(
-		"LDAP users found", "users", fmt.Sprintf("%v", serializedUsers),
+		"LDAP users found", "users", fmt.Sprintf("%+v", serializedUsers),
 	)
 
 	return serializedUsers, nil
@@ -452,7 +453,7 @@ func (server *Server) buildGrafanaUser(user *ldap.Entry) (*login.ExternalUserInf
 
 	// Skipping org role sync
 	if server.cfg.LDAPSkipOrgRoleSync {
-		server.log.Debug("skipping organization role mapping.")
+		server.log.Debug("Skipping organization role mapping.")
 		return extUser, nil
 	}
 

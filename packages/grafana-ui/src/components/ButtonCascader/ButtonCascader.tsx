@@ -1,10 +1,10 @@
 import { css } from '@emotion/css';
-import RCCascader from 'rc-cascader';
+import RCCascader, { BaseOptionType } from 'rc-cascader';
 import React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
-import { stylesFactory, useTheme2 } from '../../themes';
+import { useStyles2 } from '../../themes';
 import { IconName } from '../../types/icon';
 import { Button, ButtonProps } from '../Button';
 import { CascaderOption } from '../Cascader/Cascader';
@@ -17,7 +17,7 @@ export interface ButtonCascaderProps {
   icon?: IconName;
   disabled?: boolean;
   value?: string[];
-  fieldNames?: { label: string; value: string; children: string };
+  fieldNames?: { label: keyof BaseOptionType; value: keyof BaseOptionType; children: keyof BaseOptionType };
   loadData?: (selectedOptions: CascaderOption[]) => void;
   onChange?: (value: string[], selectedOptions: CascaderOption[]) => void;
   onPopupVisibleChange?: (visible: boolean) => void;
@@ -27,27 +27,9 @@ export interface ButtonCascaderProps {
   hideDownIcon?: boolean;
 }
 
-const getStyles = stylesFactory((theme: GrafanaTheme2) => {
-  return {
-    popup: css`
-      label: popup;
-      z-index: ${theme.zIndex.dropdown};
-    `,
-    icons: {
-      right: css`
-        margin: 1px 0 0 4px;
-      `,
-      left: css`
-        margin: -1px 4px 0 0;
-      `,
-    },
-  };
-});
-
 export const ButtonCascader = (props: ButtonCascaderProps) => {
   const { onChange, className, loadData, icon, buttonProps, hideDownIcon, variant, disabled, ...rest } = props;
-  const theme = useTheme2();
-  const styles = getStyles(theme);
+  const styles = useStyles2(getStyles);
 
   // Weird way to do this bit it goes around a styling issue in Button where even null/undefined child triggers
   // styling change which messes up the look if there is only single icon content.
@@ -72,3 +54,20 @@ export const ButtonCascader = (props: ButtonCascaderProps) => {
 };
 
 ButtonCascader.displayName = 'ButtonCascader';
+
+const getStyles = (theme: GrafanaTheme2) => {
+  return {
+    popup: css({
+      label: 'popup',
+      zIndex: theme.zIndex.dropdown,
+    }),
+    icons: {
+      right: css({
+        margin: '1px 0 0 4px',
+      }),
+      left: css({
+        margin: '-1px 4px 0 0',
+      }),
+    },
+  };
+};

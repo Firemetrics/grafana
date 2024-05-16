@@ -2,22 +2,22 @@ import { action } from '@storybook/addon-actions';
 import { Meta, StoryFn } from '@storybook/react';
 import { merge } from 'lodash';
 import React, { CSSProperties, useState, ReactNode } from 'react';
-import { useInterval } from 'react-use';
+import { useInterval, useToggle } from 'react-use';
 
 import { LoadingState } from '@grafana/data';
-import { Button, Icon, PanelChrome, PanelChromeProps, RadioButtonGroup } from '@grafana/ui';
+import { Button, Icon, PanelChrome, PanelChromeProps, RadioButtonGroup, Stack } from '@grafana/ui';
 
 import { DashboardStoryCanvas } from '../../utils/storybook/DashboardStoryCanvas';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
-import { HorizontalGroup } from '../Layout/Layout';
 import { Menu } from '../Menu/Menu';
 
 import mdx from './PanelChrome.mdx';
 
+const PANEL_WIDTH = 400;
+const PANEL_HEIGHT = 150;
+
 const meta: Meta<typeof PanelChrome> = {
   title: 'Visualizations/PanelChrome',
   component: PanelChrome,
-  decorators: [withCenteredStory],
   parameters: {
     controls: {
       exclude: ['children'],
@@ -39,8 +39,8 @@ function getContentStyle(): CSSProperties {
 
 function renderPanel(name: string, overrides?: Partial<PanelChromeProps>) {
   const props: PanelChromeProps = {
-    width: 400,
-    height: 150,
+    width: PANEL_WIDTH,
+    height: PANEL_HEIGHT,
     children: () => undefined,
   };
 
@@ -50,11 +50,38 @@ function renderPanel(name: string, overrides?: Partial<PanelChromeProps>) {
 
   return (
     <PanelChrome {...props}>
-      {(innerWidth, innerHeight) => {
+      {(innerWidth: number, innerHeight: number) => {
         return <div style={{ width: innerWidth, height: innerHeight, ...contentStyle }}>{name}</div>;
       }}
     </PanelChrome>
   );
+}
+
+function renderCollapsiblePanel(name: string, overrides?: Partial<PanelChromeProps>) {
+  const props: PanelChromeProps = {
+    width: PANEL_WIDTH,
+    height: PANEL_HEIGHT,
+    children: () => undefined,
+    collapsible: true,
+  };
+
+  merge(props, overrides);
+
+  const contentStyle = getContentStyle();
+
+  const ControlledCollapseComponent = () => {
+    const [collapsed, toggleCollapsed] = useToggle(false);
+
+    return (
+      <PanelChrome {...props} collapsed={collapsed} onToggleCollapse={toggleCollapsed}>
+        {(innerWidth: number, innerHeight: number) => {
+          return <div style={{ width: innerWidth, height: innerHeight, ...contentStyle }}>{name}</div>;
+        }}
+      </PanelChrome>
+    );
+  };
+
+  return <ControlledCollapseComponent />;
 }
 
 const menu = (
@@ -96,7 +123,7 @@ export const Examples = () => {
   return (
     <DashboardStoryCanvas>
       <div>
-        <HorizontalGroup spacing="md" align="flex-start" wrap>
+        <Stack gap={2} alignItems="flex-start" wrap="wrap">
           {renderPanel('Has statusMessage', {
             title: 'Default title',
             statusMessage: 'Error text',
@@ -158,16 +185,6 @@ export const Examples = () => {
             menu,
             loadingState: LoadingState.Loading,
           })}
-          {renderPanel('Deprecated error indicator', {
-            title: 'Default title',
-            leftItems: [
-              <PanelChrome.ErrorIndicator
-                key="errorIndicator"
-                error="Error text"
-                onClick={action('ErrorIndicator: onClick fired')}
-              />,
-            ],
-          })}
           {renderPanel('No padding, deprecated loading indicator', {
             padding: 'none',
             title: 'Default title',
@@ -215,6 +232,10 @@ export const Examples = () => {
               />,
             ],
           })}
+          {renderCollapsiblePanel('Collapsible panel', {
+            title: 'Default title',
+            collapsible: true,
+          })}
           {renderPanel('Panel with action link', {
             title: 'Panel with action link',
             actions: (
@@ -233,7 +254,7 @@ export const Examples = () => {
               </Button>
             ),
           })}
-        </HorizontalGroup>
+        </Stack>
       </div>
     </DashboardStoryCanvas>
   );
@@ -243,7 +264,7 @@ export const ExamplesHoverHeader = () => {
   return (
     <DashboardStoryCanvas>
       <div>
-        <HorizontalGroup spacing="md" align="flex-start" wrap>
+        <Stack gap={2} alignItems="flex-start" wrap="wrap">
           {renderPanel('Title items, menu, hover header', {
             title: 'Default title',
             description: 'This is a description',
@@ -294,13 +315,24 @@ export const ExamplesHoverHeader = () => {
               </a>
             ),
           })}
-        </HorizontalGroup>
+        </Stack>
       </div>
     </DashboardStoryCanvas>
   );
 };
 
-export const Basic: StoryFn<typeof PanelChrome> = (args: PanelChromeProps) => {
+export const Basic: StoryFn<typeof PanelChrome> = (overrides?: Partial<PanelChromeProps>) => {
+  const args = {
+    width: 400,
+    height: 200,
+    title: 'Very long title that should get ellipsis when there is no more space',
+    description,
+    menu,
+    children: () => undefined,
+  };
+
+  merge(args, overrides);
+
   const contentStyle = getContentStyle();
 
   return (
@@ -316,15 +348,8 @@ const Default: ReactNode = [];
 const LoadingIcon = [
   <PanelChrome.LoadingIndicator key="loadingIndicator" loading onCancel={action('LoadingIndicator: onCancel fired')} />,
 ];
-const ErrorIcon = [
-  <PanelChrome.ErrorIndicator
-    key="errorIndicator"
-    error="Error text"
-    onClick={action('ErrorIndicator: onClick fired')}
-  />,
-];
 
-const leftItems = { LoadingIcon, ErrorIcon, Default };
+const leftItems = { LoadingIcon, Default };
 
 const description =
   'Description text with very long descriptive words that describe what is going on in the panel and not beyond. Or maybe beyond, not up to us.';
@@ -338,19 +363,10 @@ Basic.argTypes = {
       type: 'select',
       labels: {
         LoadingIcon: 'With loading icon',
-        ErrorIcon: 'With error icon',
         Default: 'Default (no elements)',
       },
     },
   },
-};
-
-Basic.args = {
-  width: 400,
-  height: 200,
-  title: 'Very long title that should get ellipsis when there is no more space',
-  description,
-  menu,
 };
 
 export default meta;

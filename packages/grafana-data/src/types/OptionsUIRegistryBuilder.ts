@@ -30,10 +30,10 @@ export interface OptionsEditorItem<TOptions, TSettings, TEditorProps, TValue>
 /**
  * Describes an API for option editors UI builder
  */
-export interface OptionsUIRegistryBuilderAPI<
+interface OptionsUIRegistryBuilderAPI<
   TOptions,
   TEditorProps,
-  T extends OptionsEditorItem<TOptions, any, TEditorProps, any>
+  T extends OptionsEditorItem<TOptions, any, TEditorProps, any>,
 > {
   addNumberInput?<TSettings extends NumberFieldConfigSettings = NumberFieldConfigSettings>(
     config: OptionEditorConfig<TOptions, TSettings, number>
@@ -80,7 +80,7 @@ export interface OptionsUIRegistryBuilderAPI<
 export abstract class OptionsUIRegistryBuilder<
   TOptions,
   TEditorProps,
-  T extends OptionsEditorItem<TOptions, any, TEditorProps, any>
+  T extends OptionsEditorItem<TOptions, any, TEditorProps, any>,
 > implements OptionsUIRegistryBuilderAPI<TOptions, TEditorProps, T>
 {
   private properties: T[] = [];

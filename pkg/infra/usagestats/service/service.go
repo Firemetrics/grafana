@@ -26,6 +26,8 @@ type UsageStats struct {
 
 	externalMetrics     []usagestats.MetricsFunc
 	sendReportCallbacks []usagestats.SendReportCallbackFunc
+
+	readyToReport bool
 }
 
 func ProvideService(cfg *setting.Cfg,
@@ -33,7 +35,6 @@ func ProvideService(cfg *setting.Cfg,
 	routeRegister routing.RouteRegister,
 	tracer tracing.Tracer,
 	accesscontrol ac.AccessControl,
-	accesscontrolService ac.Service,
 	bundleRegistry supportbundles.Service,
 ) (*UsageStats, error) {
 	s := &UsageStats{
@@ -43,10 +44,6 @@ func ProvideService(cfg *setting.Cfg,
 		log:           log.New("infra.usagestats"),
 		tracer:        tracer,
 		accesscontrol: accesscontrol,
-	}
-
-	if err := declareFixedRoles(accesscontrolService); err != nil {
-		return nil, err
 	}
 
 	s.registerAPIEndpoints()
@@ -82,6 +79,12 @@ func (uss *UsageStats) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-sendReportTicker.C:
+			if !uss.readyToReport {
+				nextSendInterval = time.Minute
+				sendReportTicker.Reset(nextSendInterval)
+				continue
+			}
+
 			if traceID, err := uss.sendUsageStats(ctx); err != nil {
 				uss.log.Warn("Failed to send usage stats", "error", err, "traceID", traceID)
 			}
@@ -107,6 +110,11 @@ func (uss *UsageStats) Run(ctx context.Context) error {
 
 func (uss *UsageStats) RegisterSendReportCallback(c usagestats.SendReportCallbackFunc) {
 	uss.sendReportCallbacks = append(uss.sendReportCallbacks, c)
+}
+
+func (uss *UsageStats) SetReadyToReport(context.Context) {
+	uss.log.Info("Usage stats are ready to report")
+	uss.readyToReport = true
 }
 
 func (uss *UsageStats) supportBundleCollector() supportbundles.Collector {

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 
 import { selectors } from '@grafana/e2e-selectors';
-import { locationService, reportInteraction } from '@grafana/runtime';
+import { config, locationService } from '@grafana/runtime';
 import { Menu } from '@grafana/ui';
 import { t } from 'app/core/internationalization';
 import { DashboardModel } from 'app/features/dashboard/state';
@@ -12,6 +12,7 @@ import {
   onCreateNewRow,
   onPasteCopiedPanel,
 } from 'app/features/dashboard/utils/dashboard';
+import { DashboardInteractions } from 'app/features/dashboard-scene/utils/interactions';
 import { useDispatch, useSelector } from 'app/types';
 
 import { setInitialDatasource } from '../../state/reducers';
@@ -33,17 +34,28 @@ const AddPanelMenu = ({ dashboard }: Props) => {
         label={t('dashboard.add-menu.visualization', 'Visualization')}
         onClick={() => {
           const id = onCreateNewPanel(dashboard, initialDatasource);
-          reportInteraction('dashboards_toolbar_add_clicked', { item: 'add_visualization' });
+          DashboardInteractions.toolbarAddButtonClicked({ item: 'add_visualization' });
           locationService.partial({ editPanel: id });
           dispatch(setInitialDatasource(undefined));
         }}
       />
+      {config.featureToggles.vizAndWidgetSplit && (
+        <Menu.Item
+          key="add-widget"
+          testId={selectors.pages.AddDashboard.itemButton('Add new widget menu item')}
+          label={t('dashboard.add-menu.widget', 'Widget')}
+          onClick={() => {
+            DashboardInteractions.toolbarAddButtonClicked({ item: 'add_widget' });
+            locationService.partial({ addWidget: true });
+          }}
+        />
+      )}
       <Menu.Item
         key="add-row"
         testId={selectors.pages.AddDashboard.itemButton('Add new row menu item')}
         label={t('dashboard.add-menu.row', 'Row')}
         onClick={() => {
-          reportInteraction('dashboards_toolbar_add_clicked', { item: 'add_row' });
+          DashboardInteractions.toolbarAddButtonClicked({ item: 'add_row' });
           onCreateNewRow(dashboard);
         }}
       />
@@ -52,7 +64,7 @@ const AddPanelMenu = ({ dashboard }: Props) => {
         testId={selectors.pages.AddDashboard.itemButton('Add new panel from panel library menu item')}
         label={t('dashboard.add-menu.import', 'Import from library')}
         onClick={() => {
-          reportInteraction('dashboards_toolbar_add_clicked', { item: 'import_from_library' });
+          DashboardInteractions.toolbarAddButtonClicked({ item: 'import_from_library' });
           onAddLibraryPanel(dashboard);
         }}
       />
@@ -61,7 +73,7 @@ const AddPanelMenu = ({ dashboard }: Props) => {
         testId={selectors.pages.AddDashboard.itemButton('Add new panel from clipboard menu item')}
         label={t('dashboard.add-menu.paste-panel', 'Paste panel')}
         onClick={() => {
-          reportInteraction('dashboards_toolbar_add_clicked', { item: 'paste_panel' });
+          DashboardInteractions.toolbarAddButtonClicked({ item: 'paste_panel' });
           onPasteCopiedPanel(dashboard, copiedPanelPlugin);
         }}
         disabled={!copiedPanelPlugin}

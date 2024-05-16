@@ -1,11 +1,16 @@
 ---
-description: Feature and improvement highlights for Grafana v10.0
+description: Learn about new and updated features in Grafana v10.0
 keywords:
   - grafana
   - new
   - documentation
   - '10.0'
   - release notes
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: What's new in Grafana v10.0
 weight: -37
 ---
@@ -14,7 +19,7 @@ weight: -37
 
 Welcome to Grafana 10.0! Read on to learn about changes to search and navigation, dashboards and visualizations, and security and authentication.
 
-For even more detail about all the changes in this release, refer to the [changelog](https://github.com/grafana/grafana/blob/master/CHANGELOG.md). For the specific steps we recommend when you upgrade to v10.0, check out our [Upgrade Guide]({{< relref "../upgrade-guide/upgrade-v10.0/index.md" >}}).
+For even more detail about all the changes in this release, refer to the [changelog](https://github.com/grafana/grafana/blob/main/CHANGELOG.md). For the specific steps we recommend when you upgrade to v10.0, check out our [Upgrade Guide]({{< relref "../upgrade-guide/upgrade-v10.0/index.md" >}}).
 
 <!-- Template below
 ## Feature
@@ -52,7 +57,7 @@ In subsequent releases, we’ll be refining and enhancing the user interface for
 
 _Available in public preview in all editions of Grafana._
 
-Scenes is a new front-end library by Grafana that empowers application engineers to effortlessly build stunning dashboard experiences right into their products. With Scenes, you can easily create apps that mirror the Grafana dashboarding experience, complete with template variable support, flexible layouts, dynamic panel rendering, and so much more.
+Scenes is a new front-end library by Grafana that empowers Grafana plugin developers to effortlessly build stunning dashboard-like experiences into their Grafana app plugins. With Scenes, you can easily create apps that mirror the Grafana dashboarding experience, complete with template variable support, flexible layouts, dynamic panel rendering, and so much more.
 
 To try it out, go to the [@grafana/scenes](https://github.com/grafana/scenes) repository.
 
@@ -158,7 +163,7 @@ _Generally available in all editions of Grafana._
 
 We've implemented support for adding time regions to the Time series panel. Time regions provide a more contextualized experience, enabling you to highlight certain days of the week, such as Monday to Friday to display work weeks, right alongside your data. Time regions are also a useful way to highlight specific parts of a day like night, work hours, or whatever you want to define for each day. They allow you to quickly orient yourself in parts of the day or ignore highlighted parts of the time series.
 
-To learn more, refer to our [time region documentation]({{< relref "../dashboards/build-dashboards/annotate-visualizations/#add-time-region" >}}).
+To learn more, refer to our [time region documentation]({{< relref "../dashboards/build-dashboards/annotate-visualizations/#add-time-regions" >}}).
 
 {{< figure src="/media/docs/grafana/screenshot-grafana-10-0-time-regions.png" max-width="750px" caption="Time regions" >}}
 
@@ -170,7 +175,7 @@ _Generally available in all editions of Grafana._
 
 You can now filter dashboard annotations to apply annotations to all panels or selected panels, or use them to exclude selected panels.
 
-To learn more, refer to our [annotation filtering documentation]({{< relref "../dashboards/build-dashboards/annotate-visualizations/#filter-by-panel" >}}).
+To learn more, refer to our [documentation about adding annotation queries]({{< relref "../dashboards/build-dashboards/annotate-visualizations/#add-new-annotation-queries" >}}).
 
 {{< figure src="/media/docs/grafana/screenshot-grafana-10-0-annotation-filtering.png" max-width="750px" caption="Annotation filtering" >}}
 
@@ -356,7 +361,7 @@ Data types are now being defined to create a data plane layer between producers 
 
 Learn more:
 
-- [Data plane contract - Technical specification](https://grafana.github.io/dataplane/contract/)
+- [Data plane contract - Technical specification](https://grafana.com/developers/dataplane/)
 - [Example typed dataframes and Go lib to use them in tests](https://github.com/grafana/dataplane/tree/main/examples)
 - [Go library for reading and writing dataplane data](https://github.com/grafana/dataplane/tree/main/sdata)
 
@@ -413,3 +418,9 @@ Some data sources, like MySQL databases, Prometheus instances or Elasticsearch c
 To query these data sources from Grafana Cloud, you've had to open your private network to a range of IP addresses, a non-starter for many IT Security teams. The challenge is, how do you connect to your private data from Grafana Cloud, without exposing your network?
 
 The answer is Private Data Source Connect (PDC), available now in public preview in Grafana Cloud Pro and Advanced. PDC uses SOCKS over SSH to establish a secure connection between a lightweight PDC agent you deploy on your network and your Grafana Cloud stack. PDC keeps the network connection totally under your control. It’s easy to set up and manage, uses industry-standard security protocols, and works across public cloud vendors and a wide variety of secure networks. Learn more in our [Private data source connect documentation](/docs/grafana-cloud/data-configuration/configure-private-datasource-connect).
+
+## Plugins
+
+### App plugins can start using react-router v6
+
+We've added support for using `react-router` v6 in app plugins. However, we still support the use of `react-router` v5 for plugins that need to support a minimum Grafana version earlier than v10. For more information, refer to our [react-router migration guide](https://grafana.com/developers/plugin-tools/migration-guides/update-from-grafana-versions/migrate-9_x-to-10_x#update-to-react-router-v6).

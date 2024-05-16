@@ -2,9 +2,9 @@ import { css } from '@emotion/css';
 import React, { FC, useEffect, useState } from 'react';
 import { useAsync } from 'react-use';
 
-import { PanelData, CoreApp, GrafanaTheme2 } from '@grafana/data';
+import { PanelData, CoreApp, GrafanaTheme2, LoadingState } from '@grafana/data';
 import { getDataSourceSrv } from '@grafana/runtime';
-import { DataQuery, LoadingState } from '@grafana/schema';
+import { DataQuery } from '@grafana/schema';
 import { useStyles2 } from '@grafana/ui';
 import { getTimeSrv } from 'app/features/dashboard/services/TimeSrv';
 import { AlertQuery } from 'app/types/unified-alerting-dto';
@@ -60,14 +60,20 @@ export const RecordingRuleEditor: FC<RecordingRuleEditorProps> = ({
 
     const merged = {
       ...query,
-      refId: changedQuery.refId,
-      queryType: changedQuery.queryType ?? '',
+      ...changedQuery,
       datasourceUid: dataSourceId,
       expr,
       model: {
-        refId: changedQuery.refId,
         expr,
-        editorMode: 'code',
+        datasource: changedQuery.datasource,
+        refId: changedQuery.refId,
+        editorMode: changedQuery.editorMode,
+        // Instant and range are used by Prometheus queries
+        instant: changedQuery.instant,
+        range: changedQuery.range,
+        // Query type is used by Loki queries
+        queryType: changedQuery.queryType,
+        legendFormat: changedQuery.legendFormat,
       },
     };
     onChangeQuery([merged]);
@@ -109,7 +115,7 @@ export const RecordingRuleEditor: FC<RecordingRuleEditorProps> = ({
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  vizWrapper: css`
-    margin: ${theme.spacing(1, 0)};
-  `,
+  vizWrapper: css({
+    margin: theme.spacing(1, 0),
+  }),
 });

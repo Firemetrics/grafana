@@ -1,14 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
-import { createLokiDatasource } from '../../mocks';
+import { createLokiDatasource } from '../../__mocks__/datasource';
 import { LokiQuery } from '../../types';
 
 import { EXPLAIN_LABEL_FILTER_CONTENT } from './LokiQueryBuilderExplained';
 import { LokiQueryCodeEditor } from './LokiQueryCodeEditor';
 
 const defaultQuery: LokiQuery = {
-  expr: '{job="bar}',
+  expr: '{job="bar"}',
   refId: 'A',
 };
 

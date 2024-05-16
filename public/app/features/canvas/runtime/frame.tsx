@@ -36,7 +36,11 @@ export class FrameState extends ElementState {
   elements: ElementState[] = [];
   scene: Scene;
 
-  constructor(public options: CanvasFrameOptions, scene: Scene, public parent?: FrameState) {
+  constructor(
+    public options: CanvasFrameOptions,
+    scene: Scene,
+    public parent?: FrameState
+  ) {
     super(frameItemDummy, options, parent);
 
     this.scene = scene;
@@ -47,12 +51,13 @@ export class FrameState extends ElementState {
       this.options.elements = elements = [];
     }
 
-    for (const c of elements) {
-      if (c.type === 'frame') {
-        this.elements.push(new FrameState(c as CanvasFrameOptions, scene, this));
+    for (const element of elements) {
+      if (element.type === 'frame') {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        this.elements.push(new FrameState(element as CanvasFrameOptions, scene, this));
       } else {
-        const item = canvasElementRegistry.getIfExists(c.type) ?? notFoundItem;
-        this.elements.push(new ElementState(item, c, this));
+        const item = canvasElementRegistry.getIfExists(element.type) ?? notFoundItem;
+        this.elements.push(new ElementState(item, element, this));
       }
     }
   }
@@ -130,7 +135,7 @@ export class FrameState extends ElementState {
         if (shiftItemsOnDuplicate) {
           const { constraint, placement: oldPlacement } = element.options;
           const { vertical, horizontal } = constraint ?? {};
-          const placement = { ...oldPlacement } ?? ({} as Placement);
+          const placement: Placement = { ...oldPlacement } ?? {};
 
           switch (vertical) {
             case VerticalConstraint.Top:

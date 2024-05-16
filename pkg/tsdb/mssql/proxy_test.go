@@ -2,65 +2,76 @@ package mssql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"net"
 	"testing"
 
-	mssql "github.com/grafana/go-mssqldb"
-	"github.com/grafana/grafana/pkg/infra/proxy/proxyutil"
+	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/stretchr/testify/require"
-	"xorm.io/core"
+	"golang.org/x/net/proxy"
 )
 
+type testDialer struct {
+	Host string
+}
+
+func (d *testDialer) Dial(network, addr string) (c net.Conn, err error) {
+	return nil, fmt.Errorf("test-dialer: Dial is not functional")
+}
+
+func (d *testDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	hostWithPort := d.HostName() + ":1433"
+	if address != hostWithPort {
+		return nil, fmt.Errorf("test-dialer: address does not match hostname")
+	}
+	return nil, fmt.Errorf("test-dialer: DialContext is not functional")
+}
+
+func (d *testDialer) HostName() string {
+	return d.Host
+}
+
+var _ proxy.Dialer = (&testDialer{})
+
 func TestMSSQLProxyDriver(t *testing.T) {
-	settings := proxyutil.SetupTestSecureSocksProxySettings(t)
-	dialect := "mssql"
-	cnnstr := "server=127.0.0.1;port=1433;user id=sa;password=yourStrong(!)Password;database=db"
-	driverName, err := createMSSQLProxyDriver(settings, cnnstr)
-	require.NoError(t, err)
-
-	t.Run("Driver should not be registered more than once", func(t *testing.T) {
-		testDriver, err := createMSSQLProxyDriver(settings, cnnstr)
-		require.NoError(t, err)
-		require.Equal(t, driverName, testDriver)
-	})
-
-	t.Run("A new driver should be created for a new connection string", func(t *testing.T) {
-		testDriver, err := createMSSQLProxyDriver(settings, "server=localhost;user id=sa;password=yourStrong(!)Password;database=db2")
-		require.NoError(t, err)
-		require.NotEqual(t, driverName, testDriver)
-	})
-
-	t.Run("Parse should have the same result as xorm mssql parse", func(t *testing.T) {
-		xormDriver := core.QueryDriver(dialect)
-		xormResult, err := xormDriver.Parse(dialect, cnnstr)
-		require.NoError(t, err)
-
-		xormNewDriver := core.QueryDriver(driverName)
-		xormNewResult, err := xormNewDriver.Parse(dialect, cnnstr)
-		require.NoError(t, err)
-		require.Equal(t, xormResult, xormNewResult)
-	})
-
 	t.Run("Connector should use dialer context that routes through the socks proxy to db", func(t *testing.T) {
+		host := "127.0.0.1"
+		cnnstr := fmt.Sprintf("server=%s;port=1433;user id=sa;password=yourStrong(!)Password;database=db", host)
 		connector, err := mssql.NewConnector(cnnstr)
 		require.NoError(t, err)
-		driver, err := newMSSQLProxyDriver(settings, connector)
+
+		td := testDialer{
+			Host: host,
+		}
+		dialer, err := newMSSQLProxyDialer("%s", &td)
 		require.NoError(t, err)
 
-		conn, err := driver.OpenConnector(cnnstr)
-		require.NoError(t, err)
+		connector.Dialer = (dialer)
 
-		_, err = conn.Connect(context.Background())
-		require.Contains(t, err.Error(), fmt.Sprintf("socks connect tcp %s->127.0.0.1:1433", settings.ProxyAddress))
+		db := sql.OpenDB(connector)
+		err = db.Ping()
+
+		require.Contains(t, err.Error(), "test-dialer: DialContext is not functional")
 	})
 
-	t.Run("Open should use the connector that routes through the socks proxy to db", func(t *testing.T) {
+	t.Run("Connector should use hostname rather than attempting to resolve IP", func(t *testing.T) {
+		host := "www.grafana.com"
+		cnnstr := fmt.Sprintf("server=%s;port=1433;user id=sa;password=yourStrong(!)Password;database=db", host)
 		connector, err := mssql.NewConnector(cnnstr)
 		require.NoError(t, err)
-		driver, err := newMSSQLProxyDriver(settings, connector)
+
+		td := testDialer{
+			Host: host,
+		}
+		dialer, err := newMSSQLProxyDialer(host, &td)
 		require.NoError(t, err)
 
-		_, err = driver.Open(cnnstr)
-		require.Contains(t, err.Error(), fmt.Sprintf("socks connect tcp %s->127.0.0.1:1433", settings.ProxyAddress))
+		connector.Dialer = (dialer)
+
+		db := sql.OpenDB(connector)
+		err = db.Ping()
+
+		require.Contains(t, err.Error(), "test-dialer: DialContext is not functional")
 	})
 }

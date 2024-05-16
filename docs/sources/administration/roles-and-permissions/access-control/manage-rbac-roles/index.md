@@ -5,6 +5,10 @@ aliases:
   - ../../../enterprise/access-control/provisioning/
 description: Learn how to view permissions associated with roles, create custom roles,
   and update and delete roles in Grafana.
+labels:
+  products:
+    - cloud
+    - enterprise
 menuTitle: Manage RBAC roles
 title: Manage Grafana RBAC roles
 weight: 50
@@ -15,6 +19,8 @@ weight: 50
 {{% admonition type="note" %}}
 Available in [Grafana Enterprise]({{< relref "../../../../introduction/grafana-enterprise/" >}}) and [Grafana Cloud](/docs/grafana-cloud).
 {{% /admonition %}}
+
+{{< table-of-contents >}}
 
 This section includes instructions for how to view permissions associated with roles, create custom roles, and update and delete roles.
 
@@ -28,6 +34,7 @@ To see the permissions associated with basic roles, refer to the following basic
 
 | Basic role      | UID                   |
 | --------------- | --------------------- |
+| `None`          | `basic_none`          |
 | `Viewer`        | `basic_viewer`        |
 | `Editor`        | `basic_editor`        |
 | `Admin`         | `basic_admin`         |
@@ -99,7 +106,7 @@ Create a custom role when basic roles and fixed roles do not meet your permissio
 
 ### Create custom roles using provisioning
 
-File-based provisioning is one method you can use to create custom roles.
+[File-based provisioning]({{< relref "./rbac-grafana-provisioning" >}}) is one method you can use to create custom roles.
 
 1. Open the YAML configuration file and locate the `roles` section.
 
@@ -252,6 +259,10 @@ If the default basic role definitions do not meet your requirements, you can cha
 **Before you begin:**
 
 - Determine the permissions you want to add or remove from a basic role. For more information about the permissions associated with basic roles, refer to [RBAC role definitions]({{< relref "./rbac-fixed-basic-role-definitions/#basic-role-assignments" >}}).
+
+{{% admonition type="note" %}}
+You cannot modify the `No Basic Role` permissions.
+{{% /admonition %}}
 
 **To change permissions from a basic role:**
 

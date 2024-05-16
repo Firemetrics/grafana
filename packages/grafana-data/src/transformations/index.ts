@@ -7,6 +7,7 @@ export { transformDataFrame } from './transformDataFrame';
 export {
   type TransformerRegistryItem,
   type TransformerUIProps,
+  TransformerCategory,
   standardTransformersRegistry,
 } from './standardTransformersRegistry';
 export {
@@ -19,3 +20,7 @@ export type { RenameByRegexTransformerOptions } from './transformers/renameByReg
 export { joinDataFrames as outerJoinDataFrames, isLikelyAscendingVector } from './transformers/joinDataFrames';
 export * from './transformers/histogram';
 export { ensureTimeField } from './transformers/convertFieldType';
+
+// Required for Sparklines util to work in @grafana/data, but ideally kept internal
+export { applyNullInsertThreshold } from './transformers/nulls/nullInsertThreshold';
+export { nullToValue } from './transformers/nulls/nullToValue';

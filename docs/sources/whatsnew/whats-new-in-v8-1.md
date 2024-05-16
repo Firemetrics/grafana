@@ -3,13 +3,18 @@ _build:
   list: false
 aliases:
   - ../guides/whats-new-in-v8-1/
-description: Feature and improvement highlights for Grafana v8.1
+description: Learn about new and updated features in Grafana v8.1
 keywords:
   - grafana
   - new
   - documentation
   - '8.1'
   - release notes
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: What's new in Grafana v8.1
 weight: -33
 ---
@@ -20,7 +25,7 @@ weight: -33
 
 Grafana 8.1 builds upon our promise of a composable, open observability platform with new panels and extends functionality launched in Grafana 8.0. We’ve got new Geomap and Annotations panels, and some great updates to the Time Series panel. We’ve also got new transformations and updates to data sources. For our enterprise customers, there are additions to fine grained access control, updates to the reporting schedule and query caching, and more. Read on to learn more.
 
-In addition to what is summarized here, you might also be interested in our announcement blog post. For all the technical details, check out the complete [CHANGELOG.md](https://github.com/grafana/grafana/blob/master/CHANGELOG.md).
+In addition to what is summarized here, you might also be interested in our announcement blog post. For all the technical details, check out the complete [CHANGELOG.md](https://github.com/grafana/grafana/blob/main/CHANGELOG.md).
 
 ## Grafana OSS features
 
@@ -55,7 +60,7 @@ You can also create annotations in the new Time series panel bringing it closer 
 
 ### Transformations improvements
 
-Grafana 8.1 includes some significant enhancements to transformations, including two new transformations designed around providing dynamic configuration to your panels and visulizations.
+Grafana 8.1 includes some significant enhancements to transformations, including two new transformations designed around providing dynamic configuration to your panels and visualizations.
 
 #### Config from query (Beta)
 

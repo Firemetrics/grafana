@@ -3,7 +3,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 
 import { Field, GrafanaTheme2, SelectableValue } from '@grafana/data';
 
-import { Button, ClickOutsideWrapper, HorizontalGroup, IconButton, Label, VerticalGroup } from '..';
+import { Button, ClickOutsideWrapper, IconButton, Label, Stack } from '..';
 import { useStyles2, useTheme2 } from '../../themes';
 
 import { FilterList } from './FilterList';
@@ -15,9 +15,21 @@ interface Props {
   tableStyles: TableStyles;
   onClose: () => void;
   field?: Field;
+  searchFilter: string;
+  setSearchFilter: (value: string) => void;
+  operator: SelectableValue<string>;
+  setOperator: (item: SelectableValue<string>) => void;
 }
 
-export const FilterPopup = ({ column: { preFilteredRows, filterValue, setFilter }, onClose, field }: Props) => {
+export const FilterPopup = ({
+  column: { preFilteredRows, filterValue, setFilter },
+  onClose,
+  field,
+  searchFilter,
+  setSearchFilter,
+  operator,
+  setOperator,
+}: Props) => {
   const theme = useTheme2();
   const uniqueValues = useMemo(() => calculateUniqueFieldValues(preFilteredRows, field), [preFilteredRows, field]);
   const options = useMemo(() => valuesToOptions(uniqueValues), [uniqueValues]);
@@ -51,11 +63,11 @@ export const FilterPopup = ({ column: { preFilteredRows, filterValue, setFilter 
   return (
     <ClickOutsideWrapper onClick={onCancel} useCapture={true}>
       {/* This is just blocking click events from bubbeling and should not have a keyboard interaction. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
       <div className={cx(styles.filterContainer)} onClick={stopPropagation}>
-        <VerticalGroup spacing="lg">
-          <VerticalGroup spacing="xs">
-            <HorizontalGroup justify="space-between" align="center">
+        <Stack direction="column" gap={3}>
+          <Stack direction="column" gap={0.5}>
+            <Stack justifyContent="space-between" alignItems="center">
               <Label className={styles.label}>Filter by values:</Label>
               <IconButton
                 name="text-fields"
@@ -65,56 +77,65 @@ export const FilterPopup = ({ column: { preFilteredRows, filterValue, setFilter 
                   setMatchCase((s) => !s);
                 }}
               />
-            </HorizontalGroup>
+            </Stack>
             <div className={cx(styles.listDivider)} />
-            <FilterList onChange={setValues} values={values} options={options} caseSensitive={matchCase} />
-          </VerticalGroup>
-          <HorizontalGroup spacing="lg">
-            <HorizontalGroup>
+            <FilterList
+              onChange={setValues}
+              values={values}
+              options={options}
+              caseSensitive={matchCase}
+              showOperators={true}
+              searchFilter={searchFilter}
+              setSearchFilter={setSearchFilter}
+              operator={operator}
+              setOperator={setOperator}
+            />
+          </Stack>
+          <Stack gap={3}>
+            <Stack>
               <Button size="sm" onClick={onFilter}>
                 Ok
               </Button>
               <Button size="sm" variant="secondary" onClick={onCancel}>
                 Cancel
               </Button>
-            </HorizontalGroup>
+            </Stack>
             {clearFilterVisible && (
-              <HorizontalGroup>
+              <Stack>
                 <Button fill="text" size="sm" onClick={onClearFilter}>
                   Clear filter
                 </Button>
-              </HorizontalGroup>
+              </Stack>
             )}
-          </HorizontalGroup>
-        </VerticalGroup>
+          </Stack>
+        </Stack>
       </div>
     </ClickOutsideWrapper>
   );
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  filterContainer: css`
-    label: filterContainer;
-    width: 100%;
-    min-width: 250px;
-    height: 100%;
-    max-height: 400px;
-    background-color: ${theme.colors.background.primary};
-    border: 1px solid ${theme.colors.border.weak};
-    padding: ${theme.spacing(2)};
-    margin: ${theme.spacing(1)} 0;
-    box-shadow: ${theme.shadows.z3};
-    border-radius: ${theme.shape.radius.default};
-  `,
-  listDivider: css`
-    label: listDivider;
-    width: 100%;
-    border-top: 1px solid ${theme.colors.border.medium};
-    padding: ${theme.spacing(0.5, 2)};
-  `,
-  label: css`
-    margin-bottom: 0;
-  `,
+  filterContainer: css({
+    label: 'filterContainer',
+    width: '100%',
+    minWidth: '250px',
+    height: '100%',
+    maxHeight: '400px',
+    backgroundColor: theme.colors.background.primary,
+    border: `1px solid ${theme.colors.border.weak}`,
+    padding: theme.spacing(2),
+    boxShadow: theme.shadows.z3,
+    borderRadius: theme.shape.radius.default,
+  }),
+  listDivider: css({
+    label: 'listDivider',
+    width: '100%',
+    borderTop: `1px solid ${theme.colors.border.medium}`,
+    padding: theme.spacing(0.5, 2),
+  }),
+  label: css({
+    marginBottom: 0,
+  }),
 });
 
 const stopPropagation = (event: React.MouseEvent) => {

@@ -6,9 +6,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/grafana/grafana/pkg/build/config"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
+
+	"github.com/grafana/grafana/pkg/build/config"
 )
 
 const (
@@ -41,6 +42,13 @@ func TestGetConfig(t *testing.T) {
 			name:               "package.json matches tag",
 			packageJsonVersion: "10.0.0",
 			metadata:           config.Metadata{GrafanaVersion: "10.0.0", ReleaseMode: config.ReleaseMode{Mode: config.TagMode}},
+			wantErr:            false,
+		},
+		{
+			ctx:                cli.NewContext(app, setFlags(t, flag.NewFlagSet("flagSet", flag.ContinueOnError), flagObj{name: jobs, value: "2"}, flagObj{name: githubToken, value: "token"}), nil),
+			name:               "custom tag, package.json doesn't match",
+			packageJsonVersion: "10.0.0",
+			metadata:           config.Metadata{GrafanaVersion: "10.0.0-abcd123pre", ReleaseMode: config.ReleaseMode{Mode: config.TagMode}},
 			wantErr:            false,
 		},
 		{

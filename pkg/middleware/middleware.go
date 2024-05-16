@@ -48,11 +48,17 @@ func AddDefaultResponseHeaders(cfg *setting.Cfg) web.Handler {
 			_, _, resourceURLMatch := t.Match(c.Req.URL.Path)
 			resourceCachable := resourceURLMatch && allowCacheControl(c.Resp)
 			if !strings.HasPrefix(c.Req.URL.Path, "/public/plugins/") &&
-				!strings.HasPrefix(c.Req.URL.Path, "/api/datasources/proxy/") && !resourceCachable {
+				!strings.HasPrefix(c.Req.URL.Path, "/avatar/") &&
+				!strings.HasPrefix(c.Req.URL.Path, "/api/datasources/proxy/") &&
+				!strings.HasPrefix(c.Req.URL.Path, "/api/reports/render/") &&
+				!strings.HasPrefix(c.Req.URL.Path, "/render/d-solo/") && !resourceCachable {
 				addNoCacheHeaders(c.Resp)
 			}
 
-			if !cfg.AllowEmbedding {
+			// X-Allow-Embedding header is set for specific URLs that need to be embedded in an iframe regardless
+			// of the configured allow_embedding setting.
+			embeddingHeader := w.Header().Get("X-Allow-Embedding")
+			if !cfg.AllowEmbedding && embeddingHeader != "allow" {
 				addXFrameOptionsDenyHeader(w)
 			}
 			addSecurityHeaders(w, cfg)

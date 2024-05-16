@@ -5,6 +5,7 @@ import { GrafanaTheme2 } from '@grafana/data';
 
 import { useStyles2, useTheme2 } from '../../themes';
 import { IconName } from '../../types/icon';
+import { SkeletonComponent, attachSkeleton } from '../../utils/skeleton';
 
 import { OnTagClick, Tag } from './Tag';
 
@@ -56,23 +57,17 @@ const TagListComponent = memo(
 );
 TagListComponent.displayName = 'TagList';
 
-const TagListSkeleton = () => {
+const TagListSkeleton: SkeletonComponent = ({ rootProps }) => {
   const styles = useStyles2(getSkeletonStyles);
   return (
-    <div className={styles.container}>
+    <div className={styles.container} {...rootProps}>
       <Tag.Skeleton />
       <Tag.Skeleton />
     </div>
   );
 };
 
-interface TagListWithSkeleton extends React.ForwardRefExoticComponent<Props & React.RefAttributes<HTMLUListElement>> {
-  Skeleton: typeof TagListSkeleton;
-}
-
-export const TagList: TagListWithSkeleton = Object.assign(TagListComponent, {
-  Skeleton: TagListSkeleton,
-});
+export const TagList = attachSkeleton(TagListComponent, TagListSkeleton);
 
 const getSkeletonStyles = (theme: GrafanaTheme2) => ({
   container: css({
@@ -83,20 +78,20 @@ const getSkeletonStyles = (theme: GrafanaTheme2) => ({
 
 const getStyles = (theme: GrafanaTheme2, isTruncated: boolean) => {
   return {
-    wrapper: css`
-      position: relative;
-      align-items: ${isTruncated ? 'center' : 'unset'};
-      display: flex;
-      flex: 1 1 auto;
-      flex-wrap: wrap;
-      flex-shrink: ${isTruncated ? 0 : 1};
-      justify-content: flex-end;
-      gap: 6px;
-    `,
-    moreTagsLabel: css`
-      color: ${theme.colors.text.secondary};
-      font-size: ${theme.typography.size.sm};
-    `,
+    wrapper: css({
+      position: 'relative',
+      alignItems: isTruncated ? 'center' : 'unset',
+      display: 'flex',
+      flex: '1 1 auto',
+      flexWrap: 'wrap',
+      flexShrink: isTruncated ? 0 : 1,
+      justifyContent: 'flex-end',
+      gap: '6px',
+    }),
+    moreTagsLabel: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.size.sm,
+    }),
     li: css({
       listStyle: 'none',
     }),

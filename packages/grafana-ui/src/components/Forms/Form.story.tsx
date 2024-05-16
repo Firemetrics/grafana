@@ -1,4 +1,4 @@
-import { Story } from '@storybook/react';
+import { StoryFn } from '@storybook/react';
 import React from 'react';
 import { ValidateResult } from 'react-hook-form';
 
@@ -16,14 +16,13 @@ import {
   RadioButtonGroup,
 } from '@grafana/ui';
 
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 import { withStoryContainer } from '../../utils/storybook/withStoryContainer';
 
 import mdx from './Form.mdx';
 
 export default {
   title: 'Forms/Form',
-  decorators: [withStoryContainer, withCenteredStory],
+  decorators: [withStoryContainer],
   parameters: {
     docs: {
       page: mdx,
@@ -67,8 +66,9 @@ const renderForm = (defaultValues?: FormDTO) => (
       console.log(data);
     }}
   >
-    {({ register, control, errors }) =>
-      (console.log(errors) as any) || (
+    {({ register, control, errors }) => {
+      console.log(errors);
+      return (
         <>
           <Legend>Edit user</Legend>
 
@@ -120,8 +120,8 @@ const renderForm = (defaultValues?: FormDTO) => (
 
           <Button type="submit">Update</Button>
         </>
-      )
-    }
+      );
+    }}
   </Form>
 );
 
@@ -145,7 +145,7 @@ export const DefaultValues = () => {
   return <>{renderForm(defaultValues[0])}</>;
 };
 
-export const AsyncValidation: Story = ({ passAsyncValidation }) => {
+export const AsyncValidation: StoryFn = ({ passAsyncValidation }) => {
   return (
     <>
       <Form
@@ -153,8 +153,9 @@ export const AsyncValidation: Story = ({ passAsyncValidation }) => {
           alert('Submitted successfully!');
         }}
       >
-        {({ register, control, errors, formState }) =>
-          (console.log(errors) as any) || (
+        {({ register, control, errors, formState }) => {
+          console.log(errors);
+          return (
             <>
               <Legend>Edit user</Legend>
 
@@ -169,8 +170,8 @@ export const AsyncValidation: Story = ({ passAsyncValidation }) => {
                 Submit
               </Button>
             </>
-          )
-        }
+          );
+        }}
       </Form>
     </>
   );

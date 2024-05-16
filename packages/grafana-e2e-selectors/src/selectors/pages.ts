@@ -8,20 +8,20 @@ import { Components } from './components';
 export const Pages = {
   Login: {
     url: '/login',
-    username: 'Username input field',
-    password: 'Password input field',
-    submit: 'Login button',
-    skip: 'Skip change password button',
+    username: 'data-testid Username input field',
+    password: 'data-testid Password input field',
+    submit: 'data-testid Login button',
+    skip: 'data-testid Skip change password button',
   },
   Home: {
     url: '/',
   },
   DataSource: {
-    name: 'Data source settings page name input field',
+    name: 'data-testid Data source settings page name input field',
     delete: 'Data source settings page Delete button',
-    readOnly: 'Data source settings page read only message',
+    readOnly: 'data-testid Data source settings page read only message',
     saveAndTest: 'data-testid Data source settings page Save and Test button',
-    alert: 'Data source settings page Alert',
+    alert: 'data-testid Data source settings page Alert',
   },
   DataSources: {
     url: '/datasources',
@@ -43,9 +43,9 @@ export const Pages = {
   AddDashboard: {
     url: '/dashboard/new',
     itemButton: (title: string) => `data-testid ${title}`,
-    addNewPanel: 'Add new panel',
-    addNewRow: 'Add new row',
-    addNewPanelLibrary: 'Add new panel from panel library',
+    addNewPanel: 'data-testid Add new panel',
+    addNewRow: 'data-testid Add new row',
+    addNewPanelLibrary: 'data-testid Add new panel from panel library',
   },
   Dashboard: {
     url: (uid: string) => `/d/${uid}`,
@@ -56,6 +56,22 @@ export const Pages = {
       nav: 'Dashboard navigation',
       navV2: 'data-testid Dashboard navigation',
       publicDashboardTag: 'data-testid public dashboard tag',
+      shareButton: 'data-testid share-button',
+      scrollContainer: 'data-testid Dashboard canvas scroll container',
+      newShareButton: {
+        container: 'data-testid new share button',
+        shareLink: 'data-testid new share link-button',
+        arrowMenu: 'data-testid new share button arrow menu',
+        menu: {
+          container: 'data-testid new share button menu',
+          shareInternally: 'data-testid new share button share internally',
+        },
+      },
+      playlistControls: {
+        prev: 'data-testid playlist previous dashboard button',
+        stop: 'data-testid playlist stop dashboard button',
+        next: 'data-testid playlist next dashboard button',
+      },
     },
     SubMenu: {
       submenu: 'Dashboard submenu',
@@ -77,7 +93,7 @@ export const Pages = {
         close: 'data-testid dashboard-settings-close',
       },
       General: {
-        deleteDashBoard: 'Dashboard settings page delete dashboard button',
+        deleteDashBoard: 'data-testid Dashboard settings page delete dashboard button',
         sectionItems: (item: string) => `Dashboard settings section item ${item}`,
         saveDashBoard: 'Dashboard settings aside actions Save button',
         saveAsDashBoard: 'Dashboard settings aside actions Save As button',
@@ -94,14 +110,19 @@ export const Pages = {
            */
           addAnnotationCTA: Components.CallToActionCard.button('Add annotation query'),
           addAnnotationCTAV2: Components.CallToActionCard.buttonV2('Add annotation query'),
+          annotations: 'data-testid list-annotations',
         },
         Settings: {
-          name: 'Annotations settings name input',
+          name: 'data-testid Annotations settings name input',
         },
         NewAnnotation: {
           panelFilterSelect: 'data-testid annotations-panel-filter',
-          showInLabel: 'show-in-label',
+          showInLabel: 'data-testid show-in-label',
           previewInDashboard: 'data-testid annotations-preview',
+          delete: 'data-testid annotations-delete',
+          apply: 'data-testid annotations-apply',
+          enable: 'data-testid annotation-enable',
+          hide: 'data-testid annotation-hide',
         },
       },
       Variables: {
@@ -136,23 +157,22 @@ export const Pages = {
             generalLabelInputV2: 'data-testid Variable editor Form Label field',
             generalHideSelect: 'Variable editor Form Hide select',
             generalHideSelectV2: 'data-testid Variable editor Form Hide select',
-            selectionOptionsMultiSwitch: 'Variable editor Form Multi switch',
-            selectionOptionsIncludeAllSwitch: 'Variable editor Form IncludeAll switch',
-            selectionOptionsCustomAllInput: 'Variable editor Form IncludeAll field',
-            selectionOptionsCustomAllInputV2: 'data-testid Variable editor Form IncludeAll field',
-            previewOfValuesOption: 'Variable editor Preview of Values option',
-            submitButton: 'Variable editor Submit button',
+            selectionOptionsMultiSwitch: 'data-testid Variable editor Form Multi switch',
+            selectionOptionsIncludeAllSwitch: 'data-testid Variable editor Form IncludeAll switch',
+            selectionOptionsCustomAllInput: 'data-testid Variable editor Form IncludeAll field',
+            previewOfValuesOption: 'data-testid Variable editor Preview of Values option',
+            submitButton: 'data-testid Variable editor Run Query button',
             applyButton: 'data-testid Variable editor Apply button',
           },
           QueryVariable: {
-            queryOptionsDataSourceSelect: Components.DataSourcePicker.container,
+            queryOptionsDataSourceSelect: Components.DataSourcePicker.inputV2,
             queryOptionsRefreshSelect: 'Variable editor Form Query Refresh select',
             queryOptionsRefreshSelectV2: 'data-testid Variable editor Form Query Refresh select',
             queryOptionsRegExInput: 'Variable editor Form Query RegEx field',
             queryOptionsRegExInputV2: 'data-testid Variable editor Form Query RegEx field',
             queryOptionsSortSelect: 'Variable editor Form Query Sort select',
             queryOptionsSortSelectV2: 'data-testid Variable editor Form Query Sort select',
-            queryOptionsQueryInput: 'Variable editor Form Default Variable Query Editor textarea',
+            queryOptionsQueryInput: 'data-testid Variable editor Form Default Variable Query Editor textarea',
             valueGroupsTagsEnabledSwitch: 'Variable editor Form Query UseTags switch',
             valueGroupsTagsTagsQueryInput: 'Variable editor Form Query TagsQuery field',
             valueGroupsTagsTagsValuesQueryInput: 'Variable editor Form Query TagsValuesQuery field',
@@ -173,12 +193,32 @@ export const Pages = {
           },
           IntervalVariable: {
             intervalsValueInput: 'data-testid interval variable intervals input',
+            autoEnabledCheckbox: 'data-testid interval variable auto value checkbox',
+            stepCountIntervalSelect: 'data-testid interval variable step count input',
+            minIntervalInput: 'data-testid interval variable mininum interval input',
+          },
+          GroupByVariable: {
+            dataSourceSelect: Components.DataSourcePicker.inputV2,
+            infoText: 'data-testid group by variable info text',
+            modeToggle: 'data-testid group by variable mode toggle',
+          },
+          AdHocFiltersVariable: {
+            datasourceSelect: Components.DataSourcePicker.inputV2,
+            infoText: 'data-testid ad-hoc filters variable info text',
+            modeToggle: 'data-testid ad-hoc filters variable mode toggle',
           },
         },
       },
     },
     Annotations: {
       marker: 'data-testid annotation-marker',
+    },
+    Rows: {
+      Repeated: {
+        ConfigSection: {
+          warningMessage: 'data-testid Repeated rows warning message',
+        },
+      },
     },
   },
   Dashboards: {
@@ -196,12 +236,12 @@ export const Pages = {
     save: 'Dashboard settings Save Dashboard Modal Save button',
     saveVariables: 'Dashboard settings Save Dashboard Modal Save variables checkbox',
     saveTimerange: 'Dashboard settings Save Dashboard Modal Save timerange checkbox',
+    saveRefresh: 'Dashboard settings Save Dashboard Modal Save refresh checkbox',
   },
   SharePanelModal: {
     linkToRenderedImage: 'Link to rendered image',
   },
   ShareDashboardModal: {
-    shareButton: 'Share dashboard or panel',
     PublicDashboard: {
       Tab: 'Tab Public dashboard',
       WillBePublicCheckbox: 'data-testid public dashboard will be public checkbox',
@@ -213,6 +253,7 @@ export const Pages = {
       DeleteButton: 'data-testid public dashboard delete button',
       CopyUrlInput: 'data-testid public dashboard copy url input',
       CopyUrlButton: 'data-testid public dashboard copy url button',
+      SettingsDropdown: 'data-testid public dashboard settings dropdown',
       TemplateVariablesWarningAlert: 'data-testid public dashboard disabled template variables alert',
       UnsupportedDataSourcesWarningAlert: 'data-testid public dashboard unsupported data sources alert',
       NoUpsertPermissionsWarningAlert: 'data-testid public dashboard no upsert permissions alert',
@@ -227,6 +268,9 @@ export const Pages = {
         ReshareLink: 'data-testid public dashboard reshare link button',
       },
     },
+    PublicDashboardScene: {
+      Tab: 'Tab Public Dashboard',
+    },
   },
   PublicDashboard: {
     page: 'public-dashboard-page',
@@ -235,11 +279,20 @@ export const Pages = {
       title: 'public-dashboard-title',
       pausedDescription: 'public-dashboard-paused-description',
     },
+    footer: 'public-dashboard-footer',
+  },
+  PublicDashboardScene: {
+    loadingPage: 'public-dashboard-scene-loading-page',
+    page: 'public-dashboard-scene-page',
+    controls: 'public-dashboard-controls',
   },
   RequestViewAccess: {
     form: 'request-view-access-form',
     recipientInput: 'request-view-access-recipient-input',
     submitButton: 'request-view-access-submit-button',
+  },
+  PublicDashboardConfirmAccess: {
+    submitButton: 'data-testid confirm-access-submit-button',
   },
   Explore: {
     url: '/explore',
@@ -249,6 +302,9 @@ export const Pages = {
       table: 'Explore Table',
       scrollView: 'data-testid explorer scroll view',
     },
+    QueryHistory: {
+      container: 'data-testid QueryHistory',
+    },
   },
   SoloPanel: {
     url: (page: string) => `/d-solo/${page}`,
@@ -257,22 +313,28 @@ export const Pages = {
     page: 'Plugins list page',
     list: 'Plugins list',
     listItem: 'Plugins list item',
-    signatureErrorNotice: 'Unsigned plugins notice',
+    signatureErrorNotice: 'data-testid Unsigned plugins notice',
   },
   PluginPage: {
     page: 'Plugin page',
-    signatureInfo: 'Plugin signature info',
-    disabledInfo: 'Plugin disabled info',
+    signatureInfo: 'data-testid Plugin signature info',
+    disabledInfo: 'data-testid Plugin disabled info',
   },
   PlaylistForm: {
     name: 'Playlist name',
     interval: 'Playlist interval',
-    itemDelete: 'Delete playlist item',
+    itemDelete: 'data-testid playlist-form-delete-item',
   },
-  BrowseDashbards: {
+  BrowseDashboards: {
     table: {
-      row: (uid: string) => `data-testid ${uid} row`,
+      body: 'data-testid browse-dashboards-table',
+      row: (name: string) => `data-testid browse dashboards row ${name}`,
       checkbox: (uid: string) => `data-testid ${uid} checkbox`,
+    },
+    NewFolderForm: {
+      form: 'data-testid new folder form',
+      nameInput: 'data-testid new-folder-name-input',
+      createButton: 'data-testid new-folder-create-button',
     },
   },
   Search: {
@@ -293,6 +355,7 @@ export const Pages = {
     tabs: {
       allUsers: 'data-testid all-users-tab',
       orgUsers: 'data-testid org-users-tab',
+      anonUserDevices: 'data-testid anon-user-devices-tab',
       publicDashboardsUsers: 'data-testid public-dashboards-users-tab',
       users: 'data-testid users-tab',
     },
@@ -311,11 +374,17 @@ export const Pages = {
     UsersListPage: {
       container: 'data-testid users-list-page',
     },
+    UserAnonListPage: {
+      container: 'data-testid user-anon-list-page',
+    },
     UsersListPublicDashboardsPage: {
       container: 'data-testid users-list-public-dashboards-page',
       DashboardsListModal: {
         listItem: (uid: string) => `data-testid dashboards-list-item-${uid}`,
       },
     },
+  },
+  ProfilePage: {
+    url: '/profile',
   },
 };

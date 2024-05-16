@@ -7,6 +7,7 @@ import { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2, useTheme2 } from '../../themes';
 import { IconName } from '../../types/icon';
 import { getTagColor, getTagColorsFromName } from '../../utils';
+import { SkeletonComponent, attachSkeleton } from '../../utils/skeleton';
 import { Icon } from '../Icon/Icon';
 
 /**
@@ -50,18 +51,12 @@ const TagComponent = forwardRef<HTMLElement, Props>(({ name, onClick, icon, clas
 });
 TagComponent.displayName = 'Tag';
 
-const TagSkeleton = () => {
+const TagSkeleton: SkeletonComponent = ({ rootProps }) => {
   const styles = useStyles2(getSkeletonStyles);
-  return <Skeleton width={60} height={22} containerClassName={styles.container} />;
+  return <Skeleton width={60} height={22} containerClassName={styles.container} {...rootProps} />;
 };
 
-interface TagWithSkeleton extends React.ForwardRefExoticComponent<Props & React.RefAttributes<HTMLElement>> {
-  Skeleton: typeof TagSkeleton;
-}
-
-export const Tag: TagWithSkeleton = Object.assign(TagComponent, {
-  Skeleton: TagSkeleton,
-});
+export const Tag = attachSkeleton(TagComponent, TagSkeleton);
 
 const getSkeletonStyles = () => ({
   container: css({
@@ -77,25 +72,25 @@ const getTagStyles = (theme: GrafanaTheme2, name: string, colorIndex?: number) =
     colors = getTagColor(colorIndex);
   }
   return {
-    wrapper: css`
-      appearance: none;
-      border-style: none;
-      font-weight: ${theme.typography.fontWeightMedium};
-      font-size: ${theme.typography.size.sm};
-      line-height: ${theme.typography.bodySmall.lineHeight};
-      vertical-align: baseline;
-      background-color: ${colors.color};
-      color: ${theme.v1.palette.gray98};
-      white-space: nowrap;
-      text-shadow: none;
-      padding: 3px 6px;
-      border-radius: ${theme.shape.radius.default};
-    `,
-    hover: css`
-      &:hover {
-        opacity: 0.85;
-        cursor: pointer;
-      }
-    `,
+    wrapper: css({
+      appearance: 'none',
+      borderStyle: 'none',
+      fontWeight: theme.typography.fontWeightMedium,
+      fontSize: theme.typography.size.sm,
+      lineHeight: theme.typography.bodySmall.lineHeight,
+      verticalAlign: 'baseline',
+      backgroundColor: colors.color,
+      color: theme.v1.palette.gray98,
+      whiteSpace: 'nowrap',
+      textShadow: 'none',
+      padding: '3px 6px',
+      borderRadius: theme.shape.radius.default,
+    }),
+    hover: css({
+      '&:hover': {
+        opacity: 0.85,
+        cursor: 'pointer',
+      },
+    }),
   };
 };

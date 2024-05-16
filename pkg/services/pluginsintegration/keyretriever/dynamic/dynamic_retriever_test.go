@@ -45,7 +45,7 @@ func Test_PublicKeyUpdate(t *testing.T) {
 		cfg := &setting.Cfg{}
 		expectedKey := "fake"
 		s, done := setFakeAPIServer(t, expectedKey, "7e4d0c6a708866e7")
-		cfg.GrafanaComURL = s.URL
+		cfg.GrafanaComAPIURL = s.URL + "/api"
 		v := ProvideService(cfg, keystore.ProvideService(kvstore.NewFakeKVStore()))
 		go func() {
 			err := v.Run(context.Background())
@@ -66,7 +66,7 @@ func Test_PublicKeyUpdate(t *testing.T) {
 		cfg := &setting.Cfg{}
 		expectedKey := "fake"
 		s, done := setFakeAPIServer(t, expectedKey, "7e4d0c6a708866e7")
-		cfg.GrafanaComURL = s.URL
+		cfg.GrafanaComAPIURL = s.URL + "/api"
 		v := ProvideService(cfg, keystore.ProvideService(kvstore.NewFakeKVStore()))
 		go func() {
 			err := v.Run(context.Background())
@@ -79,14 +79,14 @@ func Test_PublicKeyUpdate(t *testing.T) {
 		defer v.lock.Unlock()
 		ti, err := v.kv.GetLastUpdated(context.Background())
 		require.NoError(t, err)
-		require.Less(t, time.Time{}, *ti)
+		require.Less(t, time.Time{}, ti)
 	})
 
 	t.Run("it should remove old keys", func(t *testing.T) {
 		cfg := &setting.Cfg{}
 		expectedKey := "fake"
 		s, done := setFakeAPIServer(t, expectedKey, "other")
-		cfg.GrafanaComURL = s.URL
+		cfg.GrafanaComAPIURL = s.URL + "/api"
 		v := ProvideService(cfg, keystore.ProvideService(kvstore.NewFakeKVStore()))
 		go func() {
 			err := v.Run(context.Background())
@@ -113,7 +113,7 @@ func Test_PublicKeyUpdate(t *testing.T) {
 		}
 		expectedKey := "fake"
 		s, done := setFakeAPIServer(t, expectedKey, "7e4d0c6a708866e7")
-		cfg.GrafanaComURL = s.URL
+		cfg.GrafanaComAPIURL = s.URL + "/api"
 		v := ProvideService(cfg, keystore.ProvideService(kvstore.NewFakeKVStore()))
 		// Simulate an updated key
 		err := v.kv.SetLastUpdated(context.Background())

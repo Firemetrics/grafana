@@ -4,7 +4,7 @@ import { DataFrame, DataTransformerID, DataTransformerInfo, Field, getFieldDispl
 
 import {
   EvaluatedMappingResult,
-  evaluteFieldMappings,
+  evaluateFieldMappings,
   FieldConfigHandlerKey,
   FieldToConfigMapping,
   getFieldConfigFromFrame,
@@ -19,7 +19,7 @@ export interface RowToFieldsTransformOptions {
 export const rowsToFieldsTransformer: DataTransformerInfo<RowToFieldsTransformOptions> = {
   id: DataTransformerID.rowsToFields,
   name: 'Rows to fields',
-  description: 'Convert each row into a field with dynamic config',
+  description: 'Convert each row into a field with dynamic config.',
   defaultOptions: {},
 
   /**
@@ -35,7 +35,7 @@ export const rowsToFieldsTransformer: DataTransformerInfo<RowToFieldsTransformOp
 };
 
 export function rowsToFields(options: RowToFieldsTransformOptions, data: DataFrame): DataFrame {
-  const mappingResult = evaluteFieldMappings(data, options.mappings ?? [], true);
+  const mappingResult = evaluateFieldMappings(data, options.mappings ?? [], true);
   const { nameField, valueField } = mappingResult;
 
   if (!nameField || !valueField) {

@@ -93,12 +93,28 @@ func (f *RulerApiHandler) handleRouteGetGrafanaRulesConfig(ctx *contextmodel.Req
 	return f.GrafanaRuler.RouteGetRulesConfig(ctx)
 }
 
+func (f *RulerApiHandler) handleRouteGetRuleByUID(ctx *contextmodel.ReqContext, ruleUID string) response.Response {
+	return f.GrafanaRuler.RouteGetRuleByUID(ctx, ruleUID)
+}
+
 func (f *RulerApiHandler) handleRoutePostNameGrafanaRulesConfig(ctx *contextmodel.ReqContext, conf apimodels.PostableRuleGroupConfig, namespace string) response.Response {
 	payloadType := conf.Type()
 	if payloadType != apimodels.GrafanaBackend {
 		return errorToResponse(backendTypeDoesNotMatchPayloadTypeError(apimodels.GrafanaBackend, conf.Type().String()))
 	}
 	return f.GrafanaRuler.RoutePostNameRulesConfig(ctx, conf, namespace)
+}
+
+func (f *RulerApiHandler) handleRoutePostRulesGroupForExport(ctx *contextmodel.ReqContext, conf apimodels.PostableRuleGroupConfig, namespace string) response.Response {
+	payloadType := conf.Type()
+	if payloadType != apimodels.GrafanaBackend {
+		return errorToResponse(backendTypeDoesNotMatchPayloadTypeError(apimodels.GrafanaBackend, conf.Type().String()))
+	}
+	return f.GrafanaRuler.ExportFromPayload(ctx, conf, namespace)
+}
+
+func (f *RulerApiHandler) handleRouteGetRulesForExport(ctx *contextmodel.ReqContext) response.Response {
+	return f.GrafanaRuler.ExportRules(ctx)
 }
 
 func (f *RulerApiHandler) getService(ctx *contextmodel.ReqContext) (*LotexRuler, error) {

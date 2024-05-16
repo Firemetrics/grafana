@@ -1,19 +1,12 @@
 import { Store } from 'redux';
 
-import {
-  dateTime,
-  FieldType,
-  LoadingState,
-  PanelData,
-  PanelMenuItem,
-  PluginExtensionPanelContext,
-  PluginExtensionTypes,
-  toDataFrame,
-} from '@grafana/data';
-import { AngularComponent, getPluginExtensions } from '@grafana/runtime';
+import { PanelMenuItem, PluginExtensionLink, PluginExtensionTypes } from '@grafana/data';
+import { AngularComponent, usePluginLinkExtensions } from '@grafana/runtime';
 import config from 'app/core/config';
+import { grantUserPermissions } from 'app/features/alerting/unified/mocks';
 import * as actions from 'app/features/explore/state/main';
 import { setStore } from 'app/store/store';
+import { AccessControlAction } from 'app/types';
 
 import { PanelModel } from '../state';
 import { createDashboardModelFixture } from '../state/__fixtures__/dashboardFixtures';
@@ -23,26 +16,32 @@ import { getPanelMenu } from './getPanelMenu';
 jest.mock('app/core/services/context_srv', () => ({
   contextSrv: {
     hasAccessToExplore: () => true,
+    hasPermission: jest.fn(),
   },
 }));
 
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
-  setPluginExtensionGetter: jest.fn(),
-  getPluginExtensions: jest.fn(),
+  setPluginExtensionsHook: jest.fn(),
+  usePluginLinkExtensions: jest.fn(),
 }));
+
+const usePluginLinkExtensionsMock = jest.mocked(usePluginLinkExtensions);
 
 describe('getPanelMenu()', () => {
   beforeEach(() => {
-    (getPluginExtensions as jest.Mock).mockRestore();
-    (getPluginExtensions as jest.Mock).mockReturnValue({ extensions: [] });
+    usePluginLinkExtensionsMock.mockRestore();
+    usePluginLinkExtensionsMock.mockReturnValue({ extensions: [], isLoading: false });
+    grantUserPermissions([AccessControlAction.AlertingRuleRead, AccessControlAction.AlertingRuleUpdate]);
+    config.unifiedAlertingEnabled = false;
   });
 
   it('should return the correct panel menu items', () => {
     const panel = new PanelModel({});
     const dashboard = createDashboardModelFixture({});
+    const extensions: PluginExtensionLink[] = [];
 
-    const menuItems = getPanelMenu(dashboard, panel);
+    const menuItems = getPanelMenu(dashboard, panel, extensions);
     expect(menuItems).toMatchInlineSnapshot(`
       [
         {
@@ -66,7 +65,7 @@ describe('getPanelMenu()', () => {
         {
           "iconClassName": "compass",
           "onClick": [Function],
-          "shortcut": "x",
+          "shortcut": "p x",
           "text": "Explore",
         },
         {
@@ -119,21 +118,20 @@ describe('getPanelMenu()', () => {
 
   describe('when extending panel menu from plugins', () => {
     it('should contain menu item from link extension', () => {
-      (getPluginExtensions as jest.Mock).mockReturnValue({
-        extensions: [
-          {
-            pluginId: '...',
-            type: PluginExtensionTypes.link,
-            title: 'Declare incident',
-            description: 'Declaring an incident in the app',
-            path: '/a/grafana-basic-app/declare-incident',
-          },
-        ],
-      });
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+        },
+      ];
 
       const panel = new PanelModel({});
       const dashboard = createDashboardModelFixture({});
-      const menuItems = getPanelMenu(dashboard, panel);
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
       const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
 
       expect(extensionsSubMenu).toEqual(
@@ -147,21 +145,19 @@ describe('getPanelMenu()', () => {
     });
 
     it('should truncate menu item title to 25 chars', () => {
-      (getPluginExtensions as jest.Mock).mockReturnValue({
-        extensions: [
-          {
-            pluginId: '...',
-            type: PluginExtensionTypes.link,
-            title: 'Declare incident when pressing this amazing menu item',
-            description: 'Declaring an incident in the app',
-            path: '/a/grafana-basic-app/declare-incident',
-          },
-        ],
-      });
-
       const panel = new PanelModel({});
       const dashboard = createDashboardModelFixture({});
-      const menuItems = getPanelMenu(dashboard, panel);
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident when pressing this amazing menu item',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+        },
+      ];
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
       const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
 
       expect(extensionsSubMenu).toEqual(
@@ -176,118 +172,135 @@ describe('getPanelMenu()', () => {
 
     it('should pass onClick from plugin extension link to menu item', () => {
       const expectedOnClick = jest.fn();
-
-      (getPluginExtensions as jest.Mock).mockReturnValue({
-        extensions: [
-          {
-            pluginId: '...',
-            type: PluginExtensionTypes.link,
-            title: 'Declare incident when pressing this amazing menu item',
-            description: 'Declaring an incident in the app',
-            onClick: expectedOnClick,
-          },
-        ],
-      });
-
       const panel = new PanelModel({});
       const dashboard = createDashboardModelFixture({});
-      const menuItems = getPanelMenu(dashboard, panel);
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident when pressing this amazing menu item',
+          description: 'Declaring an incident in the app',
+          onClick: expectedOnClick,
+        },
+      ];
+
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
       const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
       const menuItem = extensionsSubMenu?.find((i) => (i.text = 'Declare incident when...'));
 
       menuItem?.onClick?.({} as React.MouseEvent);
-      expect(expectedOnClick).toBeCalledTimes(1);
+      expect(expectedOnClick).toHaveBeenCalledTimes(1);
     });
 
-    it('should pass context with correct values when configuring extension', () => {
-      const data: PanelData = {
-        series: [
-          toDataFrame({
-            fields: [
-              { name: 'time', type: FieldType.time },
-              { name: 'score', type: FieldType.number },
-            ],
+    it('should contain menu item with category', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+          category: 'Incident',
+        },
+      ];
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+      const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
+
+      expect(extensionsSubMenu).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'Incident',
+            subMenu: expect.arrayContaining([
+              expect.objectContaining({
+                text: 'Declare incident',
+                href: '/a/grafana-basic-app/declare-incident',
+              }),
+            ]),
           }),
-        ],
-        timeRange: {
-          from: dateTime(),
-          to: dateTime(),
-          raw: {
-            from: 'now',
-            to: 'now-1h',
-          },
-        },
-        state: LoadingState.Done,
-      };
+        ])
+      );
+    });
 
-      const panel = new PanelModel({
-        type: 'timeseries',
-        id: 1,
-        title: 'My panel',
-        targets: [
-          {
-            refId: 'A',
-            datasource: {
-              type: 'testdata',
-            },
-          },
-        ],
-        scopedVars: {
-          a: {
-            text: 'a',
-            value: 'a',
-          },
+    it('should truncate category to 25 chars', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+          category: 'Declare incident when pressing this amazing menu item',
         },
-        queryRunner: {
-          getLastResult: jest.fn(() => data),
-        },
-      });
+      ];
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+      const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
 
-      const dashboard = createDashboardModelFixture({
-        timezone: 'utc',
-        time: {
-          from: 'now-5m',
-          to: 'now',
-        },
-        tags: ['database', 'panel'],
-        uid: '123',
-        title: 'My dashboard',
-      });
+      expect(extensionsSubMenu).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'Declare incident when...',
+            subMenu: expect.arrayContaining([
+              expect.objectContaining({
+                text: 'Declare incident',
+                href: '/a/grafana-basic-app/declare-incident',
+              }),
+            ]),
+          }),
+        ])
+      );
+    });
 
-      getPanelMenu(dashboard, panel);
+    it('should contain menu item with category and append items without category after divider', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [
+        {
+          id: '1',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Declare incident',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+          category: 'Incident',
+        },
+        {
+          id: '2',
+          pluginId: '...',
+          type: PluginExtensionTypes.link,
+          title: 'Create forecast',
+          description: 'Declaring an incident in the app',
+          path: '/a/grafana-basic-app/declare-incident',
+        },
+      ];
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+      const extensionsSubMenu = menuItems.find((i) => i.text === 'Extensions')?.subMenu;
 
-      const context: PluginExtensionPanelContext = {
-        pluginId: 'timeseries',
-        id: 1,
-        title: 'My panel',
-        timeZone: 'utc',
-        timeRange: {
-          from: 'now-5m',
-          to: 'now',
-        },
-        targets: [
-          {
-            refId: 'A',
-            datasource: {
-              type: 'testdata',
-            },
-          },
-        ],
-        dashboard: {
-          tags: ['database', 'panel'],
-          uid: '123',
-          title: 'My dashboard',
-        },
-        scopedVars: {
-          a: {
-            text: 'a',
-            value: 'a',
-          },
-        },
-        data,
-      };
-
-      expect(getPluginExtensions).toBeCalledWith(expect.objectContaining({ context }));
+      expect(extensionsSubMenu).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'Incident',
+            subMenu: expect.arrayContaining([
+              expect.objectContaining({
+                text: 'Declare incident',
+                href: '/a/grafana-basic-app/declare-incident',
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            type: 'divider',
+          }),
+          expect.objectContaining({
+            text: 'Create forecast',
+          }),
+        ])
+      );
     });
   });
 
@@ -299,8 +312,9 @@ describe('getPanelMenu()', () => {
       const angularComponent = { getScope: () => scope } as AngularComponent;
       const panel = new PanelModel({ isViewing: true });
       const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [];
 
-      const menuItems = getPanelMenu(dashboard, panel, angularComponent);
+      const menuItems = getPanelMenu(dashboard, panel, extensions, angularComponent);
       expect(menuItems).toMatchInlineSnapshot(`
         [
           {
@@ -324,7 +338,7 @@ describe('getPanelMenu()', () => {
           {
             "iconClassName": "compass",
             "onClick": [Function],
-            "shortcut": "x",
+            "shortcut": "p x",
             "text": "Explore",
           },
           {
@@ -370,7 +384,8 @@ describe('getPanelMenu()', () => {
     beforeAll(() => {
       const panel = new PanelModel({});
       const dashboard = createDashboardModelFixture({});
-      const menuItems = getPanelMenu(dashboard, panel);
+      const extensions: PluginExtensionLink[] = [];
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
       explore = menuItems.find((item) => item.text === 'Explore') as PanelMenuItem;
       navigateSpy = jest.spyOn(actions, 'navigateToExplore');
       window.open = windowOpen;
@@ -402,6 +417,64 @@ describe('getPanelMenu()', () => {
       openInNewWindow(testUrl);
 
       expect(windowOpen).toHaveBeenLastCalledWith(`${testSubUrl}${testUrl}`);
+    });
+  });
+
+  describe('Alerting menu', () => {
+    it('should render "New alert rule" menu item if user has permissions to read and update alerts ', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [];
+
+      config.unifiedAlertingEnabled = true;
+      grantUserPermissions([AccessControlAction.AlertingRuleRead, AccessControlAction.AlertingRuleUpdate]);
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+      const moreSubMenu = menuItems.find((i) => i.text === 'More...')?.subMenu;
+
+      expect(moreSubMenu).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'New alert rule',
+          }),
+        ])
+      );
+    });
+
+    it('should not render "New alert rule" menu item, if user does not have permissions to update alerts ', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [];
+
+      grantUserPermissions([AccessControlAction.AlertingRuleRead]);
+      config.unifiedAlertingEnabled = true;
+
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+
+      const moreSubMenu = menuItems.find((i) => i.text === 'More...')?.subMenu;
+
+      expect(moreSubMenu).toEqual(
+        expect.arrayContaining([
+          expect.not.objectContaining({
+            text: 'New alert rule',
+          }),
+        ])
+      );
+    });
+
+    it('should not render "New alert rule" menu item, if user does not have permissions to read update alerts ', () => {
+      const panel = new PanelModel({});
+      const dashboard = createDashboardModelFixture({});
+      const extensions: PluginExtensionLink[] = [];
+
+      grantUserPermissions([]);
+      config.unifiedAlertingEnabled = true;
+
+      const menuItems = getPanelMenu(dashboard, panel, extensions);
+
+      const moreSubMenu = menuItems.find((i) => i.text === 'More...')?.subMenu;
+      const createAlertOption = moreSubMenu?.find((i) => i.text === 'New alert rule')?.subMenu;
+
+      expect(createAlertOption).toBeUndefined();
     });
   });
 });

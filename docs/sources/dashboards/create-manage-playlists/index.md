@@ -7,8 +7,14 @@ keywords:
   - dashboard
   - documentation
   - playlist
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 menuTitle: Manage playlists
 title: Manage playlists
+description: Create and manage dashboard playlists
 weight: 9
 ---
 

@@ -1,12 +1,12 @@
 package user
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/grafana/grafana/pkg/models/roletype"
+	"github.com/grafana/grafana/pkg/services/auth/identity"
+	"github.com/grafana/grafana/pkg/services/search/model"
 )
 
 type HelpFlags1 uint64
@@ -19,29 +19,27 @@ const (
 	HelpFlagDashboardHelp1
 )
 
-// Typed errors
-var (
-	ErrCaseInsensitive   = errors.New("case insensitive conflict")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrLastGrafanaAdmin  = errors.New("cannot remove last grafana admin")
-	ErrProtectedUser     = errors.New("cannot adopt protected user")
-	ErrNoUniqueID        = errors.New("identifying id not found")
+type UpdateEmailActionType string
+
+const (
+	EmailUpdateAction UpdateEmailActionType = "email-update"
+	LoginUpdateAction UpdateEmailActionType = "login-update"
 )
 
 type User struct {
-	ID            int64 `xorm:"pk autoincr 'id'"`
+	ID            int64  `xorm:"pk autoincr 'id'"`
+	UID           string `json:"uid" xorm:"uid"`
 	Version       int
 	Email         string
 	Name          string
 	Login         string
-	Password      string
+	Password      Password
 	Salt          string
 	Rands         string
 	Company       string
 	EmailVerified bool
 	Theme         string
-	HelpFlags1    HelpFlags1
+	HelpFlags1    HelpFlags1 `xorm:"help_flags1"`
 	IsDisabled    bool
 
 	IsAdmin          bool
@@ -54,13 +52,14 @@ type User struct {
 }
 
 type CreateUserCommand struct {
+	UID              string
 	Email            string
 	Login            string
 	Name             string
 	Company          string
 	OrgID            int64
 	OrgName          string
-	Password         string
+	Password         Password
 	EmailVerified    bool
 	IsAdmin          bool
 	IsDisabled       bool
@@ -83,32 +82,32 @@ type UpdateUserCommand struct {
 	Login string `json:"login"`
 	Theme string `json:"theme"`
 
-	UserID int64 `json:"-"`
-}
-
-type ChangeUserPasswordCommand struct {
-	OldPassword string `json:"oldPassword"`
-	NewPassword string `json:"newPassword"`
-
-	UserID int64 `json:"-"`
+	UserID         int64 `json:"-"`
+	IsDisabled     *bool `json:"-"`
+	EmailVerified  *bool `json:"-"`
+	IsGrafanaAdmin *bool `json:"-"`
+	// If password is included it will be validated, hashed and updated for user.
+	Password *Password `json:"-"`
+	// If old password is included it will be validated against users current password.
+	OldPassword *Password `json:"-"`
+	// If OrgID is included update current org for user
+	OrgID      *int64      `json:"-"`
+	HelpFlags1 *HelpFlags1 `json:"-"`
 }
 
 type UpdateUserLastSeenAtCommand struct {
-	UserID int64
-}
-
-type SetUsingOrgCommand struct {
 	UserID int64
 	OrgID  int64
 }
 
 type SearchUsersQuery struct {
-	SignedInUser *SignedInUser
+	SignedInUser identity.Requester
 	OrgID        int64 `xorm:"org_id"`
 	Query        string
 	Page         int
 	Limit        int
 	AuthModule   string
+	SortOpts     []model.SortOption
 	Filters      []Filter
 
 	IsDisabled *bool
@@ -123,6 +122,7 @@ type SearchUserQueryResult struct {
 
 type UserSearchHitDTO struct {
 	ID            int64                `json:"id" xorm:"id"`
+	UID           string               `json:"uid" xorm:"id"`
 	Name          string               `json:"name"`
 	Login         string               `json:"login"`
 	Email         string               `json:"email"`
@@ -140,21 +140,23 @@ type GetUserProfileQuery struct {
 }
 
 type UserProfileDTO struct {
-	ID                 int64           `json:"id"`
-	Email              string          `json:"email"`
-	Name               string          `json:"name"`
-	Login              string          `json:"login"`
-	Theme              string          `json:"theme"`
-	OrgID              int64           `json:"orgId,omitempty"`
-	IsGrafanaAdmin     bool            `json:"isGrafanaAdmin"`
-	IsDisabled         bool            `json:"isDisabled"`
-	IsExternal         bool            `json:"isExternal"`
-	IsExternallySynced bool            `json:"isExternallySynced"`
-	AuthLabels         []string        `json:"authLabels"`
-	UpdatedAt          time.Time       `json:"updatedAt"`
-	CreatedAt          time.Time       `json:"createdAt"`
-	AvatarURL          string          `json:"avatarUrl"`
-	AccessControl      map[string]bool `json:"accessControl,omitempty"`
+	ID                             int64           `json:"id"`
+	UID                            string          `json:"uid"`
+	Email                          string          `json:"email"`
+	Name                           string          `json:"name"`
+	Login                          string          `json:"login"`
+	Theme                          string          `json:"theme"`
+	OrgID                          int64           `json:"orgId,omitempty"`
+	IsGrafanaAdmin                 bool            `json:"isGrafanaAdmin"`
+	IsDisabled                     bool            `json:"isDisabled"`
+	IsExternal                     bool            `json:"isExternal"`
+	IsExternallySynced             bool            `json:"isExternallySynced"`
+	IsGrafanaAdminExternallySynced bool            `json:"isGrafanaAdminExternallySynced"`
+	AuthLabels                     []string        `json:"authLabels"`
+	UpdatedAt                      time.Time       `json:"updatedAt"`
+	CreatedAt                      time.Time       `json:"createdAt"`
+	AvatarURL                      string          `json:"avatarUrl"`
+	AccessControl                  map[string]bool `json:"accessControl,omitempty"`
 }
 
 // implement Conversion interface to define custom field mapping (xorm feature)
@@ -171,19 +173,9 @@ func (auth *AuthModuleConversion) ToDB() ([]byte, error) {
 	return []byte{}, nil
 }
 
-type DisableUserCommand struct {
-	UserID     int64 `xorm:"user_id"`
-	IsDisabled bool
-}
-
 type BatchDisableUsersCommand struct {
 	UserIDs    []int64 `xorm:"user_ids"`
 	IsDisabled bool
-}
-
-type SetUserHelpFlagCommand struct {
-	HelpFlags1 HelpFlags1
-	UserID     int64 `xorm:"user_id"`
 }
 
 type GetSignedInUserQuery struct {
@@ -196,27 +188,6 @@ type GetSignedInUserQuery struct {
 type AnalyticsSettings struct {
 	Identifier         string
 	IntercomIdentifier string
-}
-
-type SignedInUser struct {
-	UserID           int64 `xorm:"user_id"`
-	OrgID            int64 `xorm:"org_id"`
-	OrgName          string
-	OrgRole          roletype.RoleType
-	Login            string
-	Name             string
-	Email            string
-	ApiKeyID         int64 `xorm:"api_key_id"`
-	IsServiceAccount bool  `xorm:"is_service_account"`
-	OrgCount         int
-	IsGrafanaAdmin   bool
-	IsAnonymous      bool
-	IsDisabled       bool
-	HelpFlags1       HelpFlags1
-	LastSeenAt       time.Time
-	Teams            []int64
-	// Permissions grouped by orgID and actions
-	Permissions map[int64]map[string][]string `json:"-"`
 }
 
 func (u *User) NameOrFallback() string {
@@ -237,83 +208,19 @@ type GetUserByIDQuery struct {
 	ID int64
 }
 
+type StartVerifyEmailCommand struct {
+	User   User
+	Email  string
+	Action UpdateEmailActionType
+}
+
+type CompleteEmailVerifyCommand struct {
+	User identity.Requester
+	Code string
+}
+
 type ErrCaseInsensitiveLoginConflict struct {
 	Users []User
-}
-
-type UserDisplayDTO struct {
-	ID        int64  `json:"id,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Login     string `json:"login,omitempty"`
-	AvatarURL string `json:"avatarUrl"`
-}
-
-// ------------------------
-// DTO & Projections
-
-func (u *SignedInUser) ShouldUpdateLastSeenAt() bool {
-	return u.UserID > 0 && time.Since(u.LastSeenAt) > time.Minute*5
-}
-
-func (u *SignedInUser) NameOrFallback() string {
-	if u.Name != "" {
-		return u.Name
-	}
-	if u.Login != "" {
-		return u.Login
-	}
-	return u.Email
-}
-
-func (u *SignedInUser) ToUserDisplayDTO() *UserDisplayDTO {
-	return &UserDisplayDTO{
-		ID:    u.UserID,
-		Login: u.Login,
-		Name:  u.Name,
-	}
-}
-
-func (u *SignedInUser) HasRole(role roletype.RoleType) bool {
-	if u.IsGrafanaAdmin {
-		return true
-	}
-
-	return u.OrgRole.Includes(role)
-}
-
-// IsRealUser returns true if the user is a real user and not a service account
-func (u *SignedInUser) IsRealUser() bool {
-	// backwards compatibility
-	// checking if userId the user is a real user
-	// previously we used to check if the UserId was 0 or -1
-	// and not a service account
-	return u.UserID > 0 && !u.IsServiceAccountUser()
-}
-
-func (u *SignedInUser) IsApiKeyUser() bool {
-	return u.ApiKeyID > 0
-}
-
-// IsServiceAccountUser returns true if the user is a service account
-func (u *SignedInUser) IsServiceAccountUser() bool {
-	return u.IsServiceAccount
-}
-
-func (u *SignedInUser) HasUniqueId() bool {
-	return u.IsRealUser() || u.IsApiKeyUser() || u.IsServiceAccountUser()
-}
-
-func (u *SignedInUser) GetCacheKey() (string, error) {
-	if u.IsRealUser() {
-		return fmt.Sprintf("%d-user-%d", u.OrgID, u.UserID), nil
-	}
-	if u.IsApiKeyUser() {
-		return fmt.Sprintf("%d-apikey-%d", u.OrgID, u.ApiKeyID), nil
-	}
-	if u.IsServiceAccountUser() { // not considered a real user
-		return fmt.Sprintf("%d-service-%d", u.OrgID, u.UserID), nil
-	}
-	return "", ErrNoUniqueID
 }
 
 func (e *ErrCaseInsensitiveLoginConflict) Unwrap() error {
@@ -341,12 +248,12 @@ type Filter interface {
 
 type WhereCondition struct {
 	Condition string
-	Params    interface{}
+	Params    any
 }
 
 type InCondition struct {
 	Condition string
-	Params    interface{}
+	Params    any
 }
 
 type JoinCondition struct {
@@ -372,8 +279,7 @@ type AdminCreateUserResponse struct {
 	Message string `json:"message"`
 }
 
-type Password string
-
-func (p Password) IsWeak() bool {
-	return len(p) <= 4
+type ChangeUserPasswordCommand struct {
+	OldPassword Password `json:"oldPassword"`
+	NewPassword Password `json:"newPassword"`
 }

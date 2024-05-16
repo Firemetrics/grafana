@@ -1,6 +1,12 @@
 ---
 aliases:
   - guides/
+description: Learn about breaking changes in Grafana
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: Breaking changes
 weight: 2
 ---

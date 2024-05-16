@@ -12,7 +12,7 @@ import {
 } from '@grafana/data';
 
 import {
-  evaluteFieldMappings,
+  evaluateFieldMappings,
   FieldToConfigMapping,
   getFieldConfigFromFrame,
 } from '../fieldToConfigMapping/fieldToConfigMapping';
@@ -42,7 +42,7 @@ export function extractConfigFromQuery(options: ConfigFromQueryTransformOptions,
     length: 1,
   };
 
-  const mappingResult = evaluteFieldMappings(configFrame, options.mappings ?? [], false);
+  const mappingResult = evaluateFieldMappings(configFrame, options.mappings ?? [], false);
 
   // reduce config frame
   for (const field of configFrame.fields) {
@@ -92,7 +92,7 @@ export function extractConfigFromQuery(options: ConfigFromQueryTransformOptions,
 export const configFromDataTransformer: DataTransformerInfo<ConfigFromQueryTransformOptions> = {
   id: DataTransformerID.configFromData,
   name: 'Config from query results',
-  description: 'Set unit, min, max and more from data',
+  description: 'Set unit, min, max and more from data.',
   defaultOptions: {
     configRefId: 'config',
     mappings: [],

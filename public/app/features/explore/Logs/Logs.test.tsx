@@ -3,16 +3,34 @@ import userEvent from '@testing-library/user-event';
 import React, { ComponentProps } from 'react';
 
 import {
+  DataFrame,
   EventBusSrv,
   ExploreLogsPanelState,
+  ExplorePanelsState,
   LoadingState,
   LogLevel,
   LogRowModel,
-  MutableDataFrame,
+  standardTransformersRegistry,
   toUtc,
+  createDataFrame,
 } from '@grafana/data';
+import { organizeFieldsTransformer } from '@grafana/data/src/transformations/transformers/organize';
+import { config } from '@grafana/runtime';
+import store from 'app/core/store';
+import { extractFieldsTransformer } from 'app/features/transformers/extractFields/extractFields';
 
 import { Logs } from './Logs';
+import { visualisationTypeKey } from './utils/logs';
+import { getMockElasticFrame, getMockLokiFrame } from './utils/testMocks.test';
+
+jest.mock('app/core/store', () => {
+  return {
+    getBool: jest.fn(),
+    getObject: jest.fn((_a, b) => b),
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+});
 
 const reportInteraction = jest.fn();
 jest.mock('@grafana/runtime', () => ({
@@ -65,6 +83,21 @@ describe('Logs', () => {
       writable: true,
     });
   });
+  beforeAll(() => {
+    const transformers = [extractFieldsTransformer, organizeFieldsTransformer];
+    standardTransformersRegistry.setInit(() => {
+      return transformers.map((t) => {
+        return {
+          id: t.id,
+          aliasIds: t.aliasIds,
+          name: t.name,
+          transformation: t,
+          description: t.description,
+          editor: () => null,
+        };
+      });
+    });
+  });
 
   afterAll(() => {
     Object.defineProperty(window, 'location', {
@@ -75,13 +108,18 @@ describe('Logs', () => {
     });
   });
 
-  const getComponent = (partialProps?: Partial<ComponentProps<typeof Logs>>, logs?: LogRowModel[]) => {
+  const getComponent = (
+    partialProps?: Partial<ComponentProps<typeof Logs>>,
+    dataFrame?: DataFrame,
+    logs?: LogRowModel[]
+  ) => {
     const rows = [
-      makeLog({ uid: '1', timeEpochMs: 1 }),
-      makeLog({ uid: '2', timeEpochMs: 2 }),
-      makeLog({ uid: '3', timeEpochMs: 3 }),
+      makeLog({ uid: '1', rowId: 'id1', timeEpochMs: 1 }),
+      makeLog({ uid: '2', rowId: 'id2', timeEpochMs: 2 }),
+      makeLog({ uid: '3', rowId: 'id3', timeEpochMs: 3 }),
     ];
 
+    const testDataFrame = dataFrame ?? getMockLokiFrame();
     return (
       <Logs
         exploreId={'left'}
@@ -101,6 +139,11 @@ describe('Logs', () => {
           from: toUtc('2019-01-01 10:00:00').valueOf(),
           to: toUtc('2019-01-01 16:00:00').valueOf(),
         }}
+        range={{
+          from: toUtc('2019-01-01 10:00:00'),
+          to: toUtc('2019-01-01 16:00:00'),
+          raw: { from: 'now-1h', to: 'now' },
+        }}
         addResultsToCache={() => {}}
         onChangeTime={() => {}}
         clearCache={() => {}}
@@ -108,13 +151,48 @@ describe('Logs', () => {
           return [];
         }}
         eventBus={new EventBusSrv()}
+        isFilterLabelActive={jest.fn()}
+        logsFrames={[testDataFrame]}
         {...partialProps}
       />
     );
   };
-  const setup = (partialProps?: Partial<ComponentProps<typeof Logs>>, logs?: LogRowModel[]) => {
-    return render(getComponent(partialProps, logs));
+  const setup = (partialProps?: Partial<ComponentProps<typeof Logs>>, dataFrame?: DataFrame, logs?: LogRowModel[]) => {
+    return render(getComponent(partialProps, dataFrame ? dataFrame : getMockLokiFrame(), logs));
   };
+
+  describe('scrolling behavior', () => {
+    let originalInnerHeight: number;
+    beforeEach(() => {
+      originalInnerHeight = window.innerHeight;
+      window.innerHeight = 1000;
+      window.HTMLElement.prototype.scrollIntoView = jest.fn();
+      window.HTMLElement.prototype.scroll = jest.fn();
+    });
+    afterEach(() => {
+      window.innerHeight = originalInnerHeight;
+    });
+
+    it('should call `scrollElement.scroll`', () => {
+      const logs = [];
+      for (let i = 0; i < 50; i++) {
+        logs.push(makeLog({ uid: `uid${i}`, rowId: `id${i}`, timeEpochMs: i }));
+      }
+      const scrollElementMock = {
+        scroll: jest.fn(),
+        scrollTop: 920,
+      };
+      setup(
+        { scrollElement: scrollElementMock as unknown as HTMLDivElement, panelState: { logs: { id: 'uid47' } } },
+        undefined,
+        logs
+      );
+
+      // element.getBoundingClientRect().top will always be 0 for jsdom
+      // calc will be `scrollElement.scrollTop - window.innerHeight / 2` -> 920 - 500 = 420
+      expect(scrollElementMock.scroll).toBeCalledWith({ behavior: 'smooth', top: 420 });
+    });
+  });
 
   it('should render logs', () => {
     setup();
@@ -126,7 +204,7 @@ describe('Logs', () => {
   });
 
   it('should render no logs found', () => {
-    setup({}, []);
+    setup({}, undefined, []);
 
     expect(screen.getByText(/no logs found\./i)).toBeInTheDocument();
     expect(
@@ -158,6 +236,11 @@ describe('Logs', () => {
           from: toUtc('2019-01-01 10:00:00').valueOf(),
           to: toUtc('2019-01-01 16:00:00').valueOf(),
         }}
+        range={{
+          from: toUtc('2019-01-01 10:00:00'),
+          to: toUtc('2019-01-01 16:00:00'),
+          raw: { from: 'now-1h', to: 'now' },
+        }}
         addResultsToCache={() => {}}
         onChangeTime={() => {}}
         clearCache={() => {}}
@@ -165,6 +248,7 @@ describe('Logs', () => {
           return [];
         }}
         eventBus={new EventBusSrv()}
+        isFilterLabelActive={jest.fn()}
       />
     );
     const button = screen.getByRole('button', {
@@ -195,6 +279,11 @@ describe('Logs', () => {
           from: toUtc('2019-01-01 10:00:00').valueOf(),
           to: toUtc('2019-01-01 16:00:00').valueOf(),
         }}
+        range={{
+          from: toUtc('2019-01-01 10:00:00'),
+          to: toUtc('2019-01-01 16:00:00'),
+          raw: { from: 'now-1h', to: 'now' },
+        }}
         addResultsToCache={() => {}}
         onChangeTime={() => {}}
         clearCache={() => {}}
@@ -202,6 +291,7 @@ describe('Logs', () => {
           return [];
         }}
         eventBus={new EventBusSrv()}
+        isFilterLabelActive={jest.fn()}
       />
     );
 
@@ -236,6 +326,11 @@ describe('Logs', () => {
           from: toUtc('2019-01-01 10:00:00').valueOf(),
           to: toUtc('2019-01-01 16:00:00').valueOf(),
         }}
+        range={{
+          from: toUtc('2019-01-01 10:00:00'),
+          to: toUtc('2019-01-01 16:00:00'),
+          raw: { from: 'now-1h', to: 'now' },
+        }}
         addResultsToCache={() => {}}
         onChangeTime={() => {}}
         clearCache={() => {}}
@@ -243,6 +338,7 @@ describe('Logs', () => {
           return [];
         }}
         eventBus={new EventBusSrv()}
+        isFilterLabelActive={jest.fn()}
       />
     );
 
@@ -293,34 +389,134 @@ describe('Logs', () => {
 
     it('should call reportInteraction on permalinkClick', async () => {
       const panelState = { logs: { id: 'not-included' } };
-      setup({ loading: false, panelState });
+      const rows = [
+        makeLog({ uid: '1', rowId: 'id1', timeEpochMs: 4 }),
+        makeLog({ uid: '2', rowId: 'id2', timeEpochMs: 3 }),
+        makeLog({ uid: '3', rowId: 'id3', timeEpochMs: 2 }),
+        makeLog({ uid: '4', rowId: 'id3', timeEpochMs: 1 }),
+      ];
+      setup({ loading: false, panelState, logRows: rows });
 
       const row = screen.getAllByRole('row');
       await userEvent.hover(row[0]);
 
-      const linkButtons = row[1].querySelectorAll('button');
-      await userEvent.click(linkButtons[2]);
+      const linkButton = screen.getByLabelText('Copy shortlink');
+      await userEvent.click(linkButton);
 
       expect(reportInteraction).toHaveBeenCalledWith('grafana_explore_logs_permalink_clicked', {
         datasourceType: 'unknown',
-        logRowUid: '2',
+        logRowUid: '1',
         logRowLevel: 'debug',
       });
     });
 
-    it('should call createAndCopyShortLink on permalinkClick', async () => {
-      const panelState = { logs: { id: 'not-included' } };
-      setup({ loading: false, panelState });
+    it('should call createAndCopyShortLink on permalinkClick - logs', async () => {
+      const panelState: Partial<ExplorePanelsState> = { logs: { id: 'not-included', visualisationType: 'logs' } };
+      const rows = [
+        makeLog({ uid: '1', rowId: 'id1', timeEpochMs: 1 }),
+        makeLog({ uid: '2', rowId: 'id2', timeEpochMs: 1 }),
+        makeLog({ uid: '3', rowId: 'id3', timeEpochMs: 2 }),
+        makeLog({ uid: '4', rowId: 'id3', timeEpochMs: 2 }),
+      ];
+      setup({ loading: false, panelState, logRows: rows });
 
       const row = screen.getAllByRole('row');
       await userEvent.hover(row[0]);
 
-      const linkButtons = row[1].querySelectorAll('button');
-      await userEvent.click(linkButtons[2]);
+      const linkButton = screen.getByLabelText('Copy shortlink');
+      await userEvent.click(linkButton);
 
       expect(createAndCopyShortLink).toHaveBeenCalledWith(
-        'http://localhost:3000/explore?left=%7B%22datasource%22:%22%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22id%22%7D%7D%5D,%22range%22:%7B%22from%22:%222019-01-01T10:00:00.000Z%22,%22to%22:%222019-01-01T16:00:00.000Z%22%7D,%22panelsState%22:%7B%22logs%22:%7B%22id%22:%222%22%7D%7D%7D'
+        expect.stringMatching(
+          'range%22:%7B%22from%22:%222019-01-01T10:00:00.000Z%22,%22to%22:%222019-01-01T16:00:00.000Z%22%7D'
+        )
       );
+      expect(createAndCopyShortLink).toHaveBeenCalledWith(expect.stringMatching('visualisationType%22:%22logs'));
+    });
+
+    it('should call createAndCopyShortLink on permalinkClick - with infinite scrolling', async () => {
+      const featureToggleValue = config.featureToggles.logsInfiniteScrolling;
+      config.featureToggles.logsInfiniteScrolling = true;
+      const rows = [
+        makeLog({ uid: '1', rowId: 'id1', timeEpochMs: 1 }),
+        makeLog({ uid: '2', rowId: 'id2', timeEpochMs: 1 }),
+        makeLog({ uid: '3', rowId: 'id3', timeEpochMs: 2 }),
+        makeLog({ uid: '4', rowId: 'id3', timeEpochMs: 2 }),
+      ];
+
+      const panelState: Partial<ExplorePanelsState> = { logs: { id: 'not-included', visualisationType: 'logs' } };
+      setup({ loading: false, panelState, logRows: rows });
+
+      const row = screen.getAllByRole('row');
+      await userEvent.hover(row[3]);
+
+      const linkButton = screen.getByLabelText('Copy shortlink');
+      await userEvent.click(linkButton);
+
+      expect(createAndCopyShortLink).toHaveBeenCalledWith(
+        expect.stringMatching(
+          'range%22:%7B%22from%22:%222019-01-01T10:00:00.000Z%22,%22to%22:%221970-01-01T00:00:00.002Z%22%7D'
+        )
+      );
+      expect(createAndCopyShortLink).toHaveBeenCalledWith(expect.stringMatching('visualisationType%22:%22logs'));
+      config.featureToggles.logsInfiniteScrolling = featureToggleValue;
+    });
+  });
+
+  describe('with table visualisation', () => {
+    let originalVisualisationTypeValue = config.featureToggles.logsExploreTableVisualisation;
+
+    beforeAll(() => {
+      originalVisualisationTypeValue = config.featureToggles.logsExploreTableVisualisation;
+      config.featureToggles.logsExploreTableVisualisation = true;
+    });
+
+    afterAll(() => {
+      config.featureToggles.logsExploreTableVisualisation = originalVisualisationTypeValue;
+    });
+
+    it('should show visualisation type radio group', () => {
+      setup();
+      const logsSection = screen.getByRole('radio', { name: 'Show results in table visualisation' });
+      expect(logsSection).toBeInTheDocument();
+    });
+
+    it('should change visualisation to table on toggle (loki)', async () => {
+      setup({});
+      const logsSection = screen.getByRole('radio', { name: 'Show results in table visualisation' });
+      await userEvent.click(logsSection);
+
+      const table = screen.getByTestId('logRowsTable');
+      expect(table).toBeInTheDocument();
+    });
+
+    it('should use default state from localstorage - table', async () => {
+      const oldGet = store.get;
+      store.get = jest.fn().mockReturnValue('table');
+      localStorage.setItem(visualisationTypeKey, 'table');
+      setup({});
+      const table = await screen.findByTestId('logRowsTable');
+      expect(table).toBeInTheDocument();
+      store.get = oldGet;
+    });
+
+    it('should use default state from localstorage - logs', async () => {
+      const oldGet = store.get;
+      store.get = jest.fn().mockReturnValue('logs');
+      localStorage.setItem(visualisationTypeKey, 'logs');
+      setup({});
+      const table = await screen.findByTestId('logRows');
+      expect(table).toBeInTheDocument();
+      store.get = oldGet;
+    });
+
+    it('should change visualisation to table on toggle (elastic)', async () => {
+      setup({}, getMockElasticFrame());
+      const logsSection = screen.getByRole('radio', { name: 'Show results in table visualisation' });
+      await userEvent.click(logsSection);
+
+      const table = screen.getByTestId('logRowsTable');
+      expect(table).toBeInTheDocument();
     });
   });
 });
@@ -332,7 +528,7 @@ const makeLog = (overrides: Partial<LogRowModel>): LogRowModel => {
     uid,
     entryFieldIndex: 0,
     rowIndex: 0,
-    dataFrame: new MutableDataFrame(),
+    dataFrame: createDataFrame({ fields: [] }),
     logLevel: LogLevel.debug,
     entry,
     hasAnsi: false,

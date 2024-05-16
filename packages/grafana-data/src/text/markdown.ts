@@ -1,4 +1,5 @@
-import { marked } from 'marked';
+import { marked, MarkedOptions } from 'marked';
+import { mangle } from 'marked-mangle';
 
 import { sanitizeTextPanelContent } from './sanitize';
 
@@ -9,17 +10,15 @@ export interface RenderMarkdownOptions {
   breaks?: boolean;
 }
 
-const markdownOptions = {
+const markdownOptions: MarkedOptions = {
   pedantic: false,
   gfm: true,
-  smartLists: true,
-  smartypants: false,
-  xhtml: false,
   breaks: false,
 };
 
 export function renderMarkdown(str?: string, options?: RenderMarkdownOptions): string {
   if (!hasInitialized) {
+    marked.use(mangle());
     marked.setOptions({ ...markdownOptions });
     hasInitialized = true;
   }
@@ -33,6 +32,12 @@ export function renderMarkdown(str?: string, options?: RenderMarkdownOptions): s
   }
   const html = marked(str || '', opts);
 
+  // `marked()` returns a promise if using any extensions that require async processing.
+  // we don't use any async extensions, but there is no way for typescript to know this, so we need to check the type.
+  if (typeof html !== 'string') {
+    throw new Error('Failed to process markdown synchronously.');
+  }
+
   if (options?.noSanitize) {
     return html;
   }
@@ -42,11 +47,19 @@ export function renderMarkdown(str?: string, options?: RenderMarkdownOptions): s
 
 export function renderTextPanelMarkdown(str?: string, options?: RenderMarkdownOptions): string {
   if (!hasInitialized) {
+    marked.use(mangle());
     marked.setOptions({ ...markdownOptions });
     hasInitialized = true;
   }
 
   const html = marked(str || '');
+
+  // `marked()` returns a promise if using any extensions that require async processing.
+  // we don't use any async extensions, but there is no way for typescript to know this, so we need to check the type.
+  if (typeof html !== 'string') {
+    throw new Error('Failed to process markdown synchronously.');
+  }
+
   if (options?.noSanitize) {
     return html;
   }

@@ -2,17 +2,17 @@ import { css } from '@emotion/css';
 import React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
-import { Stack } from '@grafana/experimental';
-import { Icon, Toggletip, useStyles2 } from '@grafana/ui';
+import { Icon, Text, Toggletip, useStyles2, Stack } from '@grafana/ui';
 
 interface NeedHelpInfoProps {
-  contentText: string;
-  externalLink: string;
-  linkText: string;
-  title: string;
+  contentText: string | JSX.Element;
+  externalLink?: string;
+  linkText?: string;
+  title?: string;
 }
-export function NeedHelpInfo({ contentText, externalLink, linkText, title }: NeedHelpInfoProps) {
+export function NeedHelpInfo({ contentText, externalLink, linkText, title = 'Need help?' }: NeedHelpInfoProps) {
   const styles = useStyles2(getStyles);
+
   return (
     <Toggletip
       content={<div className={styles.mutedText}>{contentText}</div>}
@@ -23,44 +23,38 @@ export function NeedHelpInfo({ contentText, externalLink, linkText, title }: Nee
         </Stack>
       }
       footer={
-        <a href={externalLink} target="_blank" rel="noreferrer">
-          <div className={styles.infoLink}>
-            {linkText} <Icon name="external-link-alt" />
-          </div>
-        </a>
+        externalLink ? (
+          <a href={externalLink} target="_blank" rel="noreferrer">
+            <Stack direction="row" gap={0.5} alignItems="center">
+              <Text color="link">
+                {linkText} <Icon size="sm" name="external-link-alt" />
+              </Text>
+            </Stack>
+          </a>
+        ) : undefined
       }
       closeButton={true}
       placement="bottom-start"
     >
       <div className={styles.helpInfo}>
-        <Icon name="question-circle" />
-        <div className={styles.helpInfoText}>Need help?</div>
+        <Stack direction="row" alignItems="center" gap={0.5}>
+          <Icon name="question-circle" size="sm" />
+          <Text variant="bodySmall" color="primary">
+            Need help?
+          </Text>
+        </Stack>
       </div>
     </Toggletip>
   );
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  mutedText: css`
-    color: ${theme.colors.text.secondary};
-    font-size: ${theme.typography.size.sm};
-  `,
-  helpInfo: css`
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    width: fit-content;
-    font-weight: ${theme.typography.fontWeightMedium};
-    margin-left: ${theme.spacing(1)};
-    font-size: ${theme.typography.size.sm};
-    cursor: pointer;
-    color: ${theme.colors.text.primary};
-  `,
-  helpInfoText: css`
-    margin-left: ${theme.spacing(0.5)};
-    text-decoration: underline;
-  `,
-  infoLink: css`
-    color: ${theme.colors.text.link};
-  `,
+  mutedText: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.size.sm,
+  }),
+  helpInfo: css({
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  }),
 });

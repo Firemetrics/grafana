@@ -1,12 +1,38 @@
 package accesscontrol
 
 import (
+	// #nosec G505 Used only for generating a 160 bit hash, it's not used for security purposes
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
+)
+
+const (
+	BasicRolePrefix    = "basic:"
+	BasicRoleUIDPrefix = "basic_"
+
+	ExternalServiceRolePrefix    = "extsvc:"
+	ExternalServiceRoleUIDPrefix = "extsvc_"
+
+	FixedRolePrefix    = "fixed:"
+	FixedRoleUIDPrefix = "fixed_"
+
+	ManagedRolePrefix = "managed:"
+
+	PluginRolePrefix = "plugins:"
+
+	BasicRoleNoneUID  = "basic_none"
+	BasicRoleNoneName = "basic:none"
+
+	FixedCloudRolePrefix = "fixed:cloud:"
+	FixedCloudViewerRole = "fixed:cloud:viewer"
+	FixedCloudEditorRole = "fixed:cloud:editor"
+	FixedCloudAdminRole  = "fixed:cloud:admin"
 )
 
 // Roles definition
@@ -187,6 +213,81 @@ var (
 				Action: ActionSettingsWrite,
 				Scope:  ScopeSettingsSAML,
 			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("azuread"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("azuread"),
+			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("okta"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("okta"),
+			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("github"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("github"),
+			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("gitlab"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("gitlab"),
+			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("google"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("google"),
+			},
+			{
+				Action: ActionSettingsRead,
+				Scope:  ScopeSettingsOAuth("generic_oauth"),
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  ScopeSettingsOAuth("generic_oauth"),
+			},
+		},
+	}
+
+	generalAuthConfigWriterRole = RoleDTO{
+		Name:        "fixed:general.auth.config:writer",
+		DisplayName: "General authentication config writer",
+		Description: "Read and update the Grafana instance's general authentication configuration.",
+		Group:       "Settings",
+		Permissions: []Permission{
+			{
+				Action: ActionSettingsRead,
+				Scope:  "settings:auth:oauth_allow_insecure_email_lookup",
+			},
+			{
+				Action: ActionSettingsWrite,
+				Scope:  "settings:auth:oauth_allow_insecure_email_lookup",
+			},
+		},
+	}
+
+	usagestatsReaderRole = RoleDTO{
+		Name:        "fixed:usagestats:reader",
+		DisplayName: "Usage stats report reader",
+		Description: "View usage statistics report",
+		Group:       "Statistics",
+		Permissions: []Permission{
+			{Action: ActionUsageStatsRead},
 		},
 	}
 )
@@ -225,19 +326,26 @@ func DeclareFixedRoles(service Service, cfg *setting.Cfg) error {
 		Role:   usersWriterRole,
 		Grants: []string{RoleGrafanaAdmin},
 	}
-
+	generalAuthConfigWriter := RoleRegistration{
+		Role:   generalAuthConfigWriterRole,
+		Grants: []string{RoleGrafanaAdmin},
+	}
 	// TODO: Move to own service when implemented
 	authenticationConfigWriter := RoleRegistration{
 		Role:   authenticationConfigWriterRole,
 		Grants: []string{RoleGrafanaAdmin},
 	}
 
-	if cfg.AuthConfigUIAdminAccess {
-		authenticationConfigWriter.Grants = append(authenticationConfigWriter.Grants, string(org.RoleAdmin))
+	usageStatsReader := RoleRegistration{
+		Role:   usagestatsReaderRole,
+		Grants: []string{RoleGrafanaAdmin},
 	}
 
-	return service.DeclareFixedRoles(ldapReader, ldapWriter, orgUsersReader, orgUsersWriter,
-		settingsReader, statsReader, usersReader, usersWriter, authenticationConfigWriter)
+	return service.DeclareFixedRoles(
+		ldapReader, ldapWriter, orgUsersReader, orgUsersWriter,
+		settingsReader, statsReader, usersReader, usersWriter,
+		authenticationConfigWriter, generalAuthConfigWriter, usageStatsReader,
+	)
 }
 
 func ConcatPermissions(permissions ...[]Permission) []Permission {
@@ -253,6 +361,18 @@ func ConcatPermissions(permissions ...[]Permission) []Permission {
 	return perms
 }
 
+// PrefixedRoleUID generates a uid from name with the same prefix.
+// Generated uid is 28 bytes + length of prefix: <prefix>_base64(sha1(roleName))
+func PrefixedRoleUID(roleName string) string {
+	prefix := strings.Split(roleName, ":")[0] + "_"
+
+	// #nosec G505 Used only for generating a 160 bit hash, it's not used for security purposes
+	hasher := sha1.New()
+	hasher.Write([]byte(roleName))
+
+	return fmt.Sprintf("%s%s", prefix, base64.RawURLEncoding.EncodeToString(hasher.Sum(nil)))
+}
+
 // ValidateFixedRole errors when a fixed role does not match expected pattern
 func ValidateFixedRole(role RoleDTO) error {
 	if !strings.HasPrefix(role.Name, FixedRolePrefix) {
@@ -264,8 +384,11 @@ func ValidateFixedRole(role RoleDTO) error {
 // ValidateBuiltInRoles errors when a built-in role does not match expected pattern
 func ValidateBuiltInRoles(builtInRoles []string) error {
 	for _, br := range builtInRoles {
+		if org.RoleType(br) == org.RoleNone {
+			return ErrNoneRoleAssignment
+		}
 		if !org.RoleType(br).IsValid() && br != RoleGrafanaAdmin {
-			return fmt.Errorf("'%s' %w", br, ErrInvalidBuiltinRole)
+			return ErrInvalidBuiltinRole.Build(ErrInvalidBuiltinRoleData(br))
 		}
 	}
 	return nil
@@ -290,6 +413,14 @@ func (m *RegistrationList) Range(f func(registration RoleRegistration) bool) {
 			return
 		}
 	}
+}
+
+func (m *RegistrationList) Slice() []RoleRegistration {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+	out := make([]RoleRegistration, len(m.registrations))
+	copy(out, m.registrations)
+	return out
 }
 
 func BuildBasicRoleDefinitions() map[string]*RoleDTO {
@@ -323,6 +454,17 @@ func BuildBasicRoleDefinitions() map[string]*RoleDTO {
 			Version:     1,
 			DisplayName: string(org.RoleViewer),
 			Description: "Viewer role",
+			Group:       "Basic",
+			Permissions: []Permission{},
+			Hidden:      true,
+		},
+		string(org.RoleNone): {
+			Name:        BasicRolePrefix + "none",
+			UID:         BasicRoleUIDPrefix + "none",
+			OrgID:       GlobalOrgID,
+			Version:     1,
+			DisplayName: string(org.RoleNone),
+			Description: "None role",
 			Group:       "Basic",
 			Permissions: []Permission{},
 			Hidden:      true,

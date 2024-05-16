@@ -25,10 +25,11 @@ export const seriesToRowsTransformer: DataTransformerInfo<SeriesToRowsTransforme
   operator: (options) => (source) =>
     source.pipe(
       map((data) => {
-        if (!Array.isArray(data) || data.length <= 1) {
+        if (!Array.isArray(data) || data.length === 0) {
           return data;
         }
 
+        data = data.filter((frame) => frame.length > 0);
         if (!isTimeSeriesFrames(data)) {
           return data;
         }

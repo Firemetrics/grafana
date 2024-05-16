@@ -8,11 +8,13 @@ import {
 import { VisibilityMode } from '@grafana/schema';
 import { commonOptionsBuilder } from '@grafana/ui';
 
+import { InsertNullsEditor } from '../timeseries/InsertNullsEditor';
 import { SpanNullsEditor } from '../timeseries/SpanNullsEditor';
+import { NullEditorSettings } from '../timeseries/config';
 
 import { StateTimelinePanel } from './StateTimelinePanel';
 import { timelinePanelChangedHandler } from './migrations';
-import { Options, FieldConfig, defaultOptions, defaultFieldConfig } from './panelcfg.gen';
+import { defaultFieldConfig, defaultOptions, FieldConfig, Options } from './panelcfg.gen';
 import { StatTimelineSuggestionsSupplier } from './suggestions';
 
 export const plugin = new PanelPlugin<Options, FieldConfig>(StateTimelinePanel)
@@ -50,15 +52,27 @@ export const plugin = new PanelPlugin<Options, FieldConfig>(StateTimelinePanel)
             step: 1,
           },
         })
-        .addCustomEditor<void, boolean>({
+        .addCustomEditor<NullEditorSettings, boolean>({
           id: 'spanNulls',
           path: 'spanNulls',
           name: 'Connect null values',
           defaultValue: false,
           editor: SpanNullsEditor,
           override: SpanNullsEditor,
-          shouldApply: (f) => f.type !== FieldType.time,
+          shouldApply: (field) => field.type !== FieldType.time,
           process: identityOverrideProcessor,
+          settings: { isTime: true },
+        })
+        .addCustomEditor<NullEditorSettings, boolean>({
+          id: 'insertNulls',
+          path: 'insertNulls',
+          name: 'Disconnect values',
+          defaultValue: false,
+          editor: InsertNullsEditor,
+          override: InsertNullsEditor,
+          shouldApply: (field) => field.type !== FieldType.time,
+          process: identityOverrideProcessor,
+          settings: { isTime: true },
         });
 
       commonOptionsBuilder.addHideFrom(builder);
@@ -107,7 +121,7 @@ export const plugin = new PanelPlugin<Options, FieldConfig>(StateTimelinePanel)
       });
 
     commonOptionsBuilder.addLegendOptions(builder, false);
-    commonOptionsBuilder.addTooltipOptions(builder, true);
+    commonOptionsBuilder.addTooltipOptions(builder);
   })
   .setSuggestionsSupplier(new StatTimelineSuggestionsSupplier())
   .setDataSupport({ annotations: true });

@@ -1,16 +1,19 @@
 import {
+  cacheFieldDisplayNames,
   DataFrame,
   DataFrameType,
   Field,
   FieldType,
   formattedValueToString,
   getDisplayProcessor,
+  getLinksSupplier,
   GrafanaTheme2,
-  LinkModel,
+  InterpolateFunction,
   outerJoinDataFrames,
   ValueFormatter,
-  ValueLinkConfig,
 } from '@grafana/data';
+import { parseSampleValue, sortSeriesByLabel } from '@grafana/prometheus';
+import { config } from '@grafana/runtime';
 import { HeatmapCellLayout } from '@grafana/schema';
 import {
   calculateHeatmapFromData,
@@ -18,13 +21,25 @@ import {
   readHeatmapRowsCustomMeta,
   rowsToCellsHeatmap,
 } from 'app/features/transformers/calculateHeatmap/heatmap';
-import { parseSampleValue, sortSeriesByLabel } from 'app/plugins/datasource/prometheus/result_transformer';
 
 import { CellValues, Options } from './types';
-import { boundedMinMax } from './utils';
+import { boundedMinMax, valuesToFills } from './utils';
 
 export interface HeatmapData {
   heatmap?: DataFrame; // data we will render
+  heatmapColors?: {
+    // quantized palette
+    palette: string[];
+    // indices into palette
+    values: number[];
+
+    // color scale range
+    minValue: number;
+    maxValue: number;
+  };
+
+  series?: DataFrame; // the joined single frame for nonNumericOrdinalY data links
+
   exemplars?: DataFrame; // optionally linked exemplars
   exemplarColor?: string;
 
@@ -43,10 +58,6 @@ export interface HeatmapData {
   xLogSplit?: number;
   yLogSplit?: number;
 
-  // color scale range
-  minValue?: number;
-  maxValue?: number;
-
   // Print a heatmap cell value
   display?: (v: number) => string;
 
@@ -58,23 +69,56 @@ export function prepareHeatmapData(
   frames: DataFrame[],
   annotations: DataFrame[] | undefined,
   options: Options,
+  palette: string[],
   theme: GrafanaTheme2,
-  getFieldLinks?: (exemplars: DataFrame, field: Field) => (config: ValueLinkConfig) => Array<LinkModel<Field>>
+  replaceVariables: InterpolateFunction = (v) => v
 ): HeatmapData {
   if (!frames?.length) {
     return {};
   }
 
+  cacheFieldDisplayNames(frames);
+
   const exemplars = annotations?.find((f) => f.name === 'exemplar');
 
-  if (getFieldLinks) {
-    exemplars?.fields.forEach((field, index) => {
-      exemplars.fields[index].getLinks = getFieldLinks(exemplars, field);
-    });
-  }
+  exemplars?.fields.forEach((field) => {
+    field.getLinks = getLinksSupplier(exemplars, field, field.state?.scopedVars ?? {}, replaceVariables);
+  });
 
   if (options.calculate) {
-    return getDenseHeatmapData(calculateHeatmapFromData(frames, options.calculation ?? {}), exemplars, options, theme);
+    if (config.featureToggles.transformationsVariableSupport) {
+      const optionsCopy = {
+        ...options,
+        calculation: {
+          xBuckets: { ...options.calculation?.xBuckets } ?? undefined,
+          yBuckets: { ...options.calculation?.yBuckets } ?? undefined,
+        },
+      };
+
+      if (optionsCopy.calculation?.xBuckets?.value && replaceVariables !== undefined) {
+        optionsCopy.calculation.xBuckets.value = replaceVariables(optionsCopy.calculation.xBuckets.value);
+      }
+
+      if (optionsCopy.calculation?.yBuckets?.value && replaceVariables !== undefined) {
+        optionsCopy.calculation.yBuckets.value = replaceVariables(optionsCopy.calculation.yBuckets.value);
+      }
+
+      return getDenseHeatmapData(
+        calculateHeatmapFromData(frames, optionsCopy.calculation ?? {}),
+        exemplars,
+        optionsCopy,
+        palette,
+        theme
+      );
+    }
+
+    return getDenseHeatmapData(
+      calculateHeatmapFromData(frames, options.calculation ?? {}),
+      exemplars,
+      options,
+      palette,
+      theme
+    );
   }
 
   // Check for known heatmap types
@@ -83,8 +127,8 @@ export function prepareHeatmapData(
     switch (frame.meta?.type) {
       case DataFrameType.HeatmapCells:
         return isHeatmapCellsDense(frame)
-          ? getDenseHeatmapData(frame, exemplars, options, theme)
-          : getSparseHeatmapData(frame, exemplars, options, theme);
+          ? getDenseHeatmapData(frame, exemplars, options, palette, theme)
+          : getSparseHeatmapData(frame, exemplars, options, palette, theme);
 
       case DataFrameType.HeatmapRows:
         rowsHeatmap = frame; // the default format
@@ -92,28 +136,27 @@ export function prepareHeatmapData(
   }
 
   // Everything past here assumes a field for each row in the heatmap (buckets)
-  if (!rowsHeatmap) {
+  if (rowsHeatmap == null) {
     if (frames.length > 1) {
       let allNamesNumeric = frames.every(
-        (frame) => !Number.isNaN(parseSampleValue(frame.name ?? frame.fields[1].name))
+        (frame) => !Number.isNaN(parseSampleValue(frame.fields[1].state?.displayName!))
       );
 
       if (allNamesNumeric) {
         frames.sort(sortSeriesByLabel);
       }
 
-      rowsHeatmap = [
-        outerJoinDataFrames({
-          frames,
-        })!,
-      ][0];
+      rowsHeatmap = outerJoinDataFrames({
+        frames,
+        keepDisplayNames: true,
+      })!;
     } else {
       let frame = frames[0];
       let numberFields = frame.fields.filter((field) => field.type === FieldType.number);
-      let allNamesNumeric = numberFields.every((field) => !Number.isNaN(parseSampleValue(field.name)));
+      let allNamesNumeric = numberFields.every((field) => !Number.isNaN(parseSampleValue(field.state?.displayName!)));
 
       if (allNamesNumeric) {
-        numberFields.sort((a, b) => parseSampleValue(a.name) - parseSampleValue(b.name));
+        numberFields.sort((a, b) => parseSampleValue(a.state?.displayName!) - parseSampleValue(b.state?.displayName!));
 
         rowsHeatmap = {
           ...frame,
@@ -125,23 +168,38 @@ export function prepareHeatmapData(
     }
   }
 
-  return getDenseHeatmapData(
-    rowsToCellsHeatmap({
-      unit: options.yAxis?.unit, // used to format the ordinal lookup values
-      decimals: options.yAxis?.decimals,
-      ...options.rowsFrame,
-      frame: rowsHeatmap,
-    }),
-    exemplars,
-    options,
-    theme
-  );
+  // config data links
+  rowsHeatmap.fields.forEach((field) => {
+    if ((field.config.links?.length ?? 0) === 0) {
+      return;
+    }
+
+    // this expects that the tooltip is able to identify the field and rowIndex from a dense hovered index
+    field.getLinks = getLinksSupplier(rowsHeatmap!, field, field.state?.scopedVars ?? {}, replaceVariables);
+  });
+
+  return {
+    ...getDenseHeatmapData(
+      rowsToCellsHeatmap({
+        unit: options.yAxis?.unit, // used to format the ordinal lookup values
+        decimals: options.yAxis?.decimals,
+        ...options.rowsFrame,
+        frame: rowsHeatmap,
+      }),
+      exemplars,
+      options,
+      palette,
+      theme
+    ),
+    series: rowsHeatmap,
+  };
 }
 
 const getSparseHeatmapData = (
   frame: DataFrame,
   exemplars: DataFrame | undefined,
   options: Options,
+  palette: string[],
   theme: GrafanaTheme2
 ): HeatmapData => {
   if (frame.meta?.type !== DataFrameType.HeatmapCells || isHeatmapCellsDense(frame)) {
@@ -154,11 +212,13 @@ const getSparseHeatmapData = (
   // y axis tick label display
   updateFieldDisplay(frame.fields[1], options.yAxis, theme);
 
+  const valueField = frame.fields[3];
+
   // cell value display
-  const disp = updateFieldDisplay(frame.fields[3], options.cellValues, theme);
+  const disp = updateFieldDisplay(valueField, options.cellValues, theme);
 
   let [minValue, maxValue] = boundedMinMax(
-    frame.fields[3].values,
+    valueField.values,
     options.color.min,
     options.color.max,
     options.filterValues?.le,
@@ -167,8 +227,12 @@ const getSparseHeatmapData = (
 
   return {
     heatmap: frame,
-    minValue,
-    maxValue,
+    heatmapColors: {
+      palette,
+      values: valuesToFills(valueField.values, palette, minValue, maxValue),
+      minValue,
+      maxValue,
+    },
     exemplars,
     display: (v) => formattedValueToString(disp(v)),
   };
@@ -178,6 +242,7 @@ const getDenseHeatmapData = (
   frame: DataFrame,
   exemplars: DataFrame | undefined,
   options: Options,
+  palette: string[],
   theme: GrafanaTheme2
 ): HeatmapData => {
   if (frame.meta?.type !== DataFrameType.HeatmapCells) {
@@ -269,6 +334,13 @@ const getDenseHeatmapData = (
 
   const data: HeatmapData = {
     heatmap: frame,
+    heatmapColors: {
+      palette,
+      values: valuesToFills(valueField.values, palette, minValue, maxValue),
+      minValue,
+      maxValue,
+    },
+
     exemplars: exemplars?.length ? exemplars : undefined,
     xBucketSize: xBinIncr,
     yBucketSize: yBinIncr,
@@ -280,9 +352,6 @@ const getDenseHeatmapData = (
 
     xLogSplit: calcX?.scale?.log ? +(calcX?.value ?? '1') : 1,
     yLogSplit: calcY?.scale?.log ? +(calcY?.value ?? '1') : 1,
-
-    minValue,
-    maxValue,
 
     // TODO: improve heuristic
     xLayout:

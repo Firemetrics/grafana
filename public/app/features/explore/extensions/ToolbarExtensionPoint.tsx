@@ -1,16 +1,16 @@
 import React, { lazy, ReactElement, Suspense, useMemo, useState } from 'react';
 
-import { type PluginExtensionLink, PluginExtensionPoints, RawTimeRange } from '@grafana/data';
-import { getPluginLinkExtensions } from '@grafana/runtime';
+import { type PluginExtensionLink, PluginExtensionPoints, RawTimeRange, getTimeZone } from '@grafana/data';
+import { config, usePluginLinkExtensions } from '@grafana/runtime';
 import { DataQuery, TimeZone } from '@grafana/schema';
-import { Dropdown, Menu, ToolbarButton } from '@grafana/ui';
+import { Dropdown, ToolbarButton } from '@grafana/ui';
 import { contextSrv } from 'app/core/services/context_srv';
-import { truncateTitle } from 'app/features/plugins/extensions/utils';
 import { AccessControlAction, ExplorePanelData, useSelector } from 'app/types';
 
-import { getExploreItemSelector } from '../state/selectors';
+import { getExploreItemSelector, isLeftPaneSelector, selectCorrelationDetails } from '../state/selectors';
 
 import { ConfirmNavigationModal } from './ConfirmNavigationModal';
+import { ToolbarExtensionPointMenu } from './ToolbarExtensionPointMenu';
 
 const AddToDashboard = lazy(() =>
   import('./AddToDashboard').then(({ AddToDashboard }) => ({ default: AddToDashboard }))
@@ -19,15 +19,18 @@ const AddToDashboard = lazy(() =>
 type Props = {
   exploreId: string;
   timeZone: TimeZone;
-  splitted: boolean;
 };
 
 export function ToolbarExtensionPoint(props: Props): ReactElement | null {
-  const { exploreId, splitted } = props;
+  const { exploreId } = props;
   const [selectedExtension, setSelectedExtension] = useState<PluginExtensionLink | undefined>();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const context = useExtensionPointContext(props);
-  const extensions = useExtensionLinks(context);
+  const { extensions } = usePluginLinkExtensions({
+    extensionPointId: PluginExtensionPoints.ExploreToolbarAction,
+    context: context,
+    limitPerPlugin: 3,
+  });
   const selectExploreItem = getExploreItemSelector(exploreId);
   const noQueriesInPane = useSelector(selectExploreItem)?.queries?.length;
 
@@ -35,8 +38,8 @@ export function ToolbarExtensionPoint(props: Props): ReactElement | null {
   // adding a query to a dashboard.
   if (extensions.length <= 1) {
     const canAddPanelToDashboard =
-      contextSrv.hasAccess(AccessControlAction.DashboardsCreate, contextSrv.isEditor) ||
-      contextSrv.hasAccess(AccessControlAction.DashboardsWrite, contextSrv.isEditor);
+      contextSrv.hasPermission(AccessControlAction.DashboardsCreate) ||
+      contextSrv.hasPermission(AccessControlAction.DashboardsWrite);
 
     if (!canAddPanelToDashboard) {
       return null;
@@ -49,36 +52,13 @@ export function ToolbarExtensionPoint(props: Props): ReactElement | null {
     );
   }
 
-  const menu = (
-    <Menu>
-      {extensions.map((extension) => (
-        <Menu.Item
-          ariaLabel={extension.title}
-          icon={extension?.icon || 'plug'}
-          key={extension.id}
-          label={truncateTitle(extension.title, 25)}
-          onClick={(event) => {
-            if (extension.path) {
-              return setSelectedExtension(extension);
-            }
-            extension.onClick?.(event);
-          }}
-        />
-      ))}
-    </Menu>
-  );
+  const menu = <ToolbarExtensionPointMenu extensions={extensions} onSelect={setSelectedExtension} />;
 
   return (
     <>
       <Dropdown onVisibleChange={setIsOpen} placement="bottom-start" overlay={menu}>
-        <ToolbarButton
-          aria-label="Add"
-          icon="plus"
-          disabled={!Boolean(noQueriesInPane)}
-          variant="canvas"
-          isOpen={isOpen}
-        >
-          {splitted ? ' ' : 'Add'}
+        <ToolbarButton aria-label="Add" disabled={!Boolean(noQueriesInPane)} variant="canvas" isOpen={isOpen}>
+          Add
         </ToolbarButton>
       </Dropdown>
       {!!selectedExtension && !!selectedExtension.path && (
@@ -98,11 +78,19 @@ export type PluginExtensionExploreContext = {
   data: ExplorePanelData;
   timeRange: RawTimeRange;
   timeZone: TimeZone;
+  shouldShowAddCorrelation: boolean;
 };
 
 function useExtensionPointContext(props: Props): PluginExtensionExploreContext {
   const { exploreId, timeZone } = props;
+  const isCorrelationDetails = useSelector(selectCorrelationDetails);
+  const isCorrelationsEditorMode = isCorrelationDetails?.editorMode || false;
   const { queries, queryResponse, range } = useSelector(getExploreItemSelector(exploreId))!;
+  const isLeftPane = useSelector(isLeftPaneSelector(exploreId));
+
+  const datasourceUids = queries.map((query) => query?.datasource?.uid).filter((uid) => uid !== undefined);
+  const numUniqueIds = [...new Set(datasourceUids)].length;
+  const canWriteCorrelations = contextSrv.hasPermission(AccessControlAction.DataSourcesWrite);
 
   return useMemo(() => {
     return {
@@ -110,18 +98,23 @@ function useExtensionPointContext(props: Props): PluginExtensionExploreContext {
       targets: queries,
       data: queryResponse,
       timeRange: range.raw,
-      timeZone: timeZone,
+      timeZone: getTimeZone({ timeZone }),
+      shouldShowAddCorrelation:
+        config.featureToggles.correlations === true &&
+        canWriteCorrelations &&
+        !isCorrelationsEditorMode &&
+        isLeftPane &&
+        numUniqueIds === 1,
     };
-  }, [exploreId, queries, queryResponse, range, timeZone]);
-}
-
-function useExtensionLinks(context: PluginExtensionExploreContext): PluginExtensionLink[] {
-  return useMemo(() => {
-    const { extensions } = getPluginLinkExtensions({
-      extensionPointId: PluginExtensionPoints.ExploreToolbarAction,
-      context: context,
-    });
-
-    return extensions;
-  }, [context]);
+  }, [
+    exploreId,
+    queries,
+    queryResponse,
+    range.raw,
+    timeZone,
+    canWriteCorrelations,
+    isCorrelationsEditorMode,
+    isLeftPane,
+    numUniqueIds,
+  ]);
 }

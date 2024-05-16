@@ -9,7 +9,7 @@ import { AlertQuery } from 'app/types/unified-alerting-dto';
 
 import { Expression } from '../expressions/Expression';
 
-import { errorFromSeries, warningFromSeries } from './util';
+import { errorFromPreviewData, warningFromSeries } from './util';
 
 interface Props {
   condition: string | null;
@@ -45,8 +45,8 @@ export const ExpressionsEditor = ({
         const data = panelData[query.refId];
 
         const isAlertCondition = condition === query.refId;
-        const error = isAlertCondition && data ? errorFromSeries(data.series) : undefined;
-        const warning = isAlertCondition && data ? warningFromSeries(data.series) : undefined;
+        const error = data ? errorFromPreviewData(data) : undefined;
+        const warning = data ? warningFromSeries(data.series) : undefined;
 
         return (
           <Expression
@@ -69,10 +69,10 @@ export const ExpressionsEditor = ({
   );
 };
 const getStyles = (theme: GrafanaTheme2) => ({
-  wrapper: css`
-    display: flex;
-    gap: ${theme.spacing(2)};
-    align-content: stretch;
-    flex-wrap: wrap;
-  `,
+  wrapper: css({
+    display: 'flex',
+    gap: theme.spacing(2),
+    alignContent: 'stretch',
+    flexWrap: 'wrap',
+  }),
 });

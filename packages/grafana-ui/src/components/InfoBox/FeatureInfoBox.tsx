@@ -4,7 +4,7 @@ import React from 'react';
 import { FeatureState, GrafanaTheme2 } from '@grafana/data';
 
 import { useStyles2 } from '../../themes';
-import { Badge, BadgeProps } from '../Badge/Badge';
+import { FeatureBadge } from '../FeatureBadge/FeatureBadge';
 
 import { InfoBox, InfoBoxProps } from './InfoBox';
 
@@ -36,35 +36,8 @@ FeatureInfoBox.displayName = 'FeatureInfoBox';
 
 const getFeatureInfoBoxStyles = (theme: GrafanaTheme2) => {
   return {
-    badge: css`
-      margin-bottom: ${theme.spacing(1)};
-    `,
+    badge: css({
+      marginBottom: theme.spacing(1),
+    }),
   };
 };
-
-interface FeatureBadgeProps {
-  featureState: FeatureState;
-  tooltip?: string;
-}
-
-export const FeatureBadge = ({ featureState, tooltip }: FeatureBadgeProps) => {
-  const display = getPanelStateBadgeDisplayModel(featureState);
-  return <Badge text={display.text} color={display.color} icon={display.icon} tooltip={tooltip} />;
-};
-
-function getPanelStateBadgeDisplayModel(featureState: FeatureState): BadgeProps {
-  switch (featureState) {
-    case FeatureState.alpha:
-      return {
-        text: 'Alpha',
-        icon: 'exclamation-triangle',
-        color: 'orange',
-      };
-  }
-
-  return {
-    text: 'Beta',
-    icon: 'rocket',
-    color: 'blue',
-  };
-}

@@ -9,11 +9,15 @@ import {
   MutableDataFrame,
   DataFrame,
 } from '@grafana/data';
+import { getMockFrames } from 'app/plugins/datasource/loki/__mocks__/frames';
 
+import { logSeriesToLogsModel } from './logsModel';
 import {
   calculateLogsLabelStats,
   calculateStats,
   checkLogsError,
+  escapeUnescapedString,
+  createLogRowsMap,
   getLogLevel,
   getLogLevelFromKey,
   getLogsVolumeMaximumRange,
@@ -222,10 +226,16 @@ describe('checkLogsError()', () => {
 describe('logRowsToReadableJson', () => {
   const testRow: LogRowModel = {
     rowIndex: 0,
-    entryFieldIndex: 0,
+    entryFieldIndex: 1,
     dataFrame: {
       length: 1,
       fields: [
+        {
+          name: 'timestamp',
+          type: FieldType.time,
+          config: {},
+          values: [1],
+        },
         {
           name: 'body',
           type: FieldType.string,
@@ -253,6 +263,12 @@ describe('logRowsToReadableJson', () => {
     length: 1,
     fields: [
       {
+        name: 'timestamp',
+        type: FieldType.time,
+        config: {},
+        values: [1],
+      },
+      {
         name: 'body',
         type: FieldType.string,
         config: {},
@@ -268,7 +284,7 @@ describe('logRowsToReadableJson', () => {
   };
   const testRow2: LogRowModel = {
     rowIndex: 0,
-    entryFieldIndex: -1,
+    entryFieldIndex: 1,
     dataFrame: testDf,
     entry: 'test entry',
     hasAnsi: false,
@@ -395,6 +411,33 @@ describe('mergeLogsVolumeDataFrames', () => {
     ]);
     expect(maximum).toBe(6);
   });
+
+  it('produces merged results order by time', () => {
+    const frame1 = mockLogVolume('info', [1600000000001, 1600000000009], [1, 1]);
+    const frame2 = mockLogVolume('info', [1600000000000, 1600000000005], [1, 1]);
+
+    const { dataFrames: merged } = mergeLogsVolumeDataFrames([frame1, frame2]);
+
+    expect(merged).toMatchObject([
+      {
+        fields: [
+          {
+            name: 'Time',
+            type: FieldType.time,
+            values: [1600000000000, 1600000000001, 1600000000005, 1600000000009],
+          },
+          {
+            name: 'Value',
+            type: FieldType.number,
+            values: [1, 1, 1, 1],
+            config: {
+              displayNameFromDS: 'info',
+            },
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('getLogsVolumeDimensions', () => {
@@ -428,5 +471,60 @@ describe('getLogsVolumeDimensions', () => {
     ]);
 
     expect(maximumRange).toEqual({ from: 5, to: 25 });
+  });
+});
+
+describe('escapeUnescapedString', () => {
+  it('does not modify strings without unescaped characters', () => {
+    expect(escapeUnescapedString('a simple string')).toBe('a simple string');
+  });
+  it('escapes unescaped strings', () => {
+    expect(escapeUnescapedString(`\\r\\n|\\n|\\t|\\r`)).toBe(`\n|\n|\t|\n`);
+  });
+});
+
+describe('findMatchingRow', () => {
+  function setup(frames: DataFrame[]) {
+    const logsModel = logSeriesToLogsModel(frames);
+    const rows = logsModel?.rows || [];
+    const findMatchingRow = createLogRowsMap();
+    for (const row of rows) {
+      expect(findMatchingRow(row)).toBeFalsy();
+    }
+    return { rows, findMatchingRow };
+  }
+
+  it('ignores rows from different queries', () => {
+    const { logFrameA, logFrameB } = getMockFrames();
+    logFrameA.refId = 'A';
+    logFrameB.refId = 'B';
+    const { rows, findMatchingRow } = setup([logFrameA, logFrameB]);
+
+    for (const row of rows) {
+      const targetRow = { ...row, dataFrame: { ...logFrameA, refId: 'Z' } };
+      expect(findMatchingRow(targetRow)).toBeFalsy();
+    }
+  });
+
+  it('matches rows by rowId', () => {
+    const { logFrameA, logFrameB } = getMockFrames();
+    const { rows, findMatchingRow } = setup([logFrameA, logFrameB]);
+
+    for (const row of rows) {
+      const targetRow = { ...row, entry: `${Math.random()}`, timeEpochNs: `${Math.ceil(Math.random() * 1000000)}` };
+      expect(findMatchingRow(targetRow)).toBeTruthy();
+    }
+  });
+
+  it('matches rows by entry and nanosecond time', () => {
+    const { logFrameA, logFrameB } = getMockFrames();
+    logFrameA.fields[4].values = [];
+    logFrameB.fields[4].values = [];
+    const { rows, findMatchingRow } = setup([logFrameA, logFrameB]);
+
+    for (const row of rows) {
+      const targetRow = { ...row, rowId: undefined };
+      expect(findMatchingRow(targetRow)).toBeTruthy();
+    }
   });
 });

@@ -30,11 +30,14 @@ const renderWithProvider = ({ initialState }: { initialState?: Partial<appTypes.
 
 describe('OrganisationSwitcher', () => {
   beforeEach(() => {
-    (window.matchMedia as jest.Mock).mockImplementation(() => ({
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      matches: true,
-    }));
+    jest.spyOn(window, 'matchMedia').mockImplementation(
+      () =>
+        ({
+          addEventListener: jest.fn(),
+          removeEventListener: jest.fn(),
+          matches: true,
+        }) as unknown as MediaQueryList
+    );
   });
 
   it('should only render if more than one organisations', () => {
@@ -80,11 +83,14 @@ describe('OrganisationSwitcher', () => {
   });
 
   it('should render a picker in mobile screen', () => {
-    (window.matchMedia as jest.Mock).mockImplementation(() => ({
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      matches: false,
-    }));
+    jest.spyOn(window, 'matchMedia').mockImplementation(
+      () =>
+        ({
+          addEventListener: jest.fn(),
+          removeEventListener: jest.fn(),
+          matches: false,
+        }) as unknown as MediaQueryList
+    );
     renderWithProvider({
       initialState: {
         organization: {
@@ -97,7 +103,7 @@ describe('OrganisationSwitcher', () => {
       },
     });
 
-    expect(screen.getByRole('button', { name: /change organization/i })).toBeInTheDocument();
+    expect(screen.getByTestId('data-testid Value picker button Change organization')).toBeInTheDocument();
   });
 
   it('should not render and not try to get user organizations if not signed in', () => {

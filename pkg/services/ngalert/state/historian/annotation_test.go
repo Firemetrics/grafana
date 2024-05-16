@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/annotations"
@@ -31,7 +32,7 @@ func TestAnnotationHistorian(t *testing.T) {
 	t.Run("alert annotations are queryable", func(t *testing.T) {
 		anns := createTestAnnotationBackendSut(t)
 		items := []annotations.Item{createAnnotation()}
-		require.NoError(t, anns.recordAnnotations(context.Background(), nil, items, 1, log.NewNopLogger()))
+		require.NoError(t, anns.store.Save(context.Background(), nil, items, 1, log.NewNopLogger()))
 
 		q := models.HistoryQuery{
 			RuleUID: "my-rule",
@@ -45,6 +46,25 @@ func TestAnnotationHistorian(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			require.Equal(t, frame.Fields[i].Len(), 1)
 		}
+	})
+
+	t.Run("annotation queries send expected item query", func(t *testing.T) {
+		store := &interceptingAnnotationStore{}
+		anns := createTestAnnotationSutWithStore(t, store)
+		now := time.Now().UTC()
+
+		q := models.HistoryQuery{
+			RuleUID: "my-rule",
+			OrgID:   1,
+			From:    now.Add(-10 * time.Second),
+			To:      now,
+		}
+		_, err := anns.Query(context.Background(), q)
+
+		require.NoError(t, err)
+		query := store.lastQuery
+		require.Equal(t, now.UnixMilli(), query.To)
+		require.Equal(t, now.Add(-10*time.Second).UnixMilli(), query.From)
 	})
 
 	t.Run("writing state transitions as annotations succeeds", func(t *testing.T) {
@@ -62,7 +82,7 @@ func TestAnnotationHistorian(t *testing.T) {
 
 	t.Run("emits expected write metrics", func(t *testing.T) {
 		reg := prometheus.NewRegistry()
-		met := metrics.NewHistorianMetrics(reg)
+		met := metrics.NewHistorianMetrics(reg, metrics.Subsystem)
 		anns := createTestAnnotationBackendSutWithMetrics(t, met)
 		errAnns := createFailingAnnotationSut(t, met)
 		rule := createTestRule()
@@ -101,7 +121,18 @@ grafana_alerting_state_history_writes_total{backend="annotations",org="1"} 2
 }
 
 func createTestAnnotationBackendSut(t *testing.T) *AnnotationBackend {
-	return createTestAnnotationBackendSutWithMetrics(t, metrics.NewHistorianMetrics(prometheus.NewRegistry()))
+	return createTestAnnotationBackendSutWithMetrics(t, metrics.NewHistorianMetrics(prometheus.NewRegistry(), metrics.Subsystem))
+}
+
+func createTestAnnotationSutWithStore(t *testing.T, annotations AnnotationStore) *AnnotationBackend {
+	t.Helper()
+	met := metrics.NewHistorianMetrics(prometheus.NewRegistry(), metrics.Subsystem)
+	rules := fakes.NewRuleStore(t)
+	rules.Rules[1] = []*models.AlertRule{
+		models.RuleGen.With(models.RuleMuts.WithOrgID(1), withUID("my-rule")).GenerateRef(),
+	}
+	annotationBackendLogger := log.New("ngalert.state.historian", "backend", "annotations")
+	return NewAnnotationBackend(annotationBackendLogger, annotations, rules, met)
 }
 
 func createTestAnnotationBackendSutWithMetrics(t *testing.T, met *metrics.Historian) *AnnotationBackend {
@@ -109,22 +140,26 @@ func createTestAnnotationBackendSutWithMetrics(t *testing.T, met *metrics.Histor
 	fakeAnnoRepo := annotationstest.NewFakeAnnotationsRepo()
 	rules := fakes.NewRuleStore(t)
 	rules.Rules[1] = []*models.AlertRule{
-		models.AlertRuleGen(withOrgID(1), withUID("my-rule"))(),
+		models.RuleGen.With(models.RuleMuts.WithOrgID(1), withUID("my-rule")).GenerateRef(),
 	}
 	dbs := &dashboards.FakeDashboardService{}
 	dbs.On("GetDashboard", mock.Anything, mock.Anything).Return(&dashboards.Dashboard{}, nil)
-	return NewAnnotationBackend(fakeAnnoRepo, dbs, rules, met)
+	store := NewAnnotationStore(fakeAnnoRepo, dbs, met)
+	annotationBackendLogger := log.New("ngalert.state.historian", "backend", "annotations")
+	return NewAnnotationBackend(annotationBackendLogger, store, rules, met)
 }
 
 func createFailingAnnotationSut(t *testing.T, met *metrics.Historian) *AnnotationBackend {
 	fakeAnnoRepo := &failingAnnotationRepo{}
 	rules := fakes.NewRuleStore(t)
 	rules.Rules[1] = []*models.AlertRule{
-		models.AlertRuleGen(withOrgID(1), withUID("my-rule"))(),
+		models.RuleGen.With(models.RuleMuts.WithOrgID(1), withUID("my-rule")).GenerateRef(),
 	}
 	dbs := &dashboards.FakeDashboardService{}
 	dbs.On("GetDashboard", mock.Anything, mock.Anything).Return(&dashboards.Dashboard{}, nil)
-	return NewAnnotationBackend(fakeAnnoRepo, dbs, rules, met)
+	annotationBackendLogger := log.New("ngalert.state.historian", "backend", "annotations")
+	store := NewAnnotationStore(fakeAnnoRepo, dbs, met)
+	return NewAnnotationBackend(annotationBackendLogger, store, rules, met)
 }
 
 func createAnnotation() annotations.Item {
@@ -135,12 +170,6 @@ func createAnnotation() annotations.Item {
 		Text:    "MyAlert {a=b} - No data",
 		Data:    simplejson.New(),
 		Epoch:   time.Now().UnixNano() / int64(time.Millisecond),
-	}
-}
-
-func withOrgID(orgId int64) func(rule *models.AlertRule) {
-	return func(rule *models.AlertRule) {
-		rule.OrgID = orgId
 	}
 }
 
@@ -199,7 +228,7 @@ func makeStateTransition() state.StateTransition {
 	}
 }
 
-func withUID(uid string) func(rule *models.AlertRule) {
+func withUID(uid string) models.AlertRuleMutator {
 	return func(rule *models.AlertRule) {
 		rule.UID = uid
 	}
@@ -210,4 +239,17 @@ func assertValidJSON(t *testing.T, j *simplejson.Json) string {
 	ser, err := json.Marshal(j)
 	require.NoError(t, err)
 	return string(ser)
+}
+
+type interceptingAnnotationStore struct {
+	lastQuery *annotations.ItemQuery
+}
+
+func (i *interceptingAnnotationStore) Find(ctx context.Context, query *annotations.ItemQuery) ([]*annotations.ItemDTO, error) {
+	i.lastQuery = query
+	return []*annotations.ItemDTO{}, nil
+}
+
+func (i *interceptingAnnotationStore) Save(ctx context.Context, panel *PanelKey, annotations []annotations.Item, orgID int64, logger log.Logger) error {
+	return nil
 }

@@ -4,19 +4,23 @@ import React from 'react';
 import { Badge } from '@grafana/ui';
 
 import { iconOptions } from '../../utils/storybook/icons';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 
 import mdx from './Badge.mdx';
 
 const meta: Meta<typeof Badge> = {
   title: 'Data Display/Badge',
   component: Badge,
-  decorators: [withCenteredStory],
   parameters: {
     docs: { page: mdx },
   },
   argTypes: {
-    icon: { options: iconOptions, control: { type: 'select' } },
+    icon: {
+      options: Object.keys(iconOptions),
+      control: {
+        type: 'select',
+        labels: iconOptions,
+      },
+    },
     color: { control: 'select' },
     text: { control: 'text' },
   },

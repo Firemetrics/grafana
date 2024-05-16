@@ -1,16 +1,13 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
+import { useArgs } from '@storybook/preview-api';
 import { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
 
 import { TimeZonePicker } from '@grafana/ui';
 
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
-
 const meta: Meta<typeof TimeZonePicker> = {
   title: 'Pickers and Editors/TimePickers/TimeZonePicker',
   component: TimeZonePicker,
-  decorators: [withCenteredStory],
   parameters: {
     controls: {
       exclude: ['inputId', 'onChange', 'onBlur'],

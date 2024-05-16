@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+//go:generate mockery --name Service --structname MockService --outpkg orgtest --filename mock.go --output ./orgtest/
 type Service interface {
 	GetIDForNewUser(context.Context, GetOrgIDForNewUserCommand) (int64, error)
 	InsertOrgUser(context.Context, *OrgUser) (int64, error)
@@ -22,4 +23,5 @@ type Service interface {
 	RemoveOrgUser(context.Context, *RemoveOrgUserCommand) error
 	GetOrgUsers(context.Context, *GetOrgUsersQuery) ([]*OrgUserDTO, error)
 	SearchOrgUsers(context.Context, *SearchOrgUsersQuery) (*SearchOrgUsersQueryResult, error)
+	RegisterDelete(query string)
 }

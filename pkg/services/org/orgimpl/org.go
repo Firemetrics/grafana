@@ -27,7 +27,6 @@ func ProvideService(db db.DB, cfg *setting.Cfg, quotaService quota.Service) (org
 			db:      db,
 			dialect: db.GetDialect(),
 			log:     log,
-			cfg:     cfg,
 		},
 		cfg: cfg,
 		log: log,
@@ -240,4 +239,8 @@ func readQuotaConfig(cfg *setting.Cfg) (*quota.Map, error) {
 	// orgs per user
 	limits.Set(userTag, cfg.Quota.User.Org)
 	return limits, nil
+}
+
+func (s *Service) RegisterDelete(query string) {
+	s.store.RegisterDelete(query)
 }

@@ -8,6 +8,10 @@ aliases:
   - ../live/set-up-grafana-live/
 description: Grafana Live is a real-time messaging engine that pushes event data to
   a frontend when an event occurs.
+labels:
+  products:
+    - enterprise
+    - oss
 menuTitle: Set up Grafana Live
 title: Set up Grafana Live
 weight: 1100
@@ -133,7 +137,7 @@ cat /proc/<PROCESS_PID>/limits
 
 The open files limit shows approximately how many user connections your server can currently handle.
 
-To increase this limit, refer to [these instructions](https://docs.riak.com/riak/kv/2.2.3/using/performance/open-files-limit.1.html)for popular operating systems.
+To increase this limit, refer to [these instructions](https://docs.riak.com/riak/kv/2.2.3/using/performance/open-files-limit.1.html) for popular operating systems.
 
 #### Ephemeral port exhaustion
 

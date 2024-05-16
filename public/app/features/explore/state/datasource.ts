@@ -6,13 +6,15 @@ import { reportInteraction } from '@grafana/runtime';
 import { DataSourceRef } from '@grafana/schema';
 import { RefreshPicker } from '@grafana/ui';
 import { stopQueryState } from 'app/core/utils/explore';
-import { ExploreItemState, ThunkResult } from 'app/types';
+import { getCorrelationsBySourceUIDs } from 'app/features/correlations/utils';
+import { ExploreItemState, createAsyncThunk } from 'app/types';
 
 import { loadSupplementaryQueries } from '../utils/supplementaryQueries';
 
+import { saveCorrelationsAction } from './explorePane';
 import { importQueries, runQueries } from './query';
 import { changeRefreshInterval } from './time';
-import { createEmptyQueryResponse, loadAndInitDatasource } from './utils';
+import { createEmptyQueryResponse, getDatasourceUIDs, loadAndInitDatasource } from './utils';
 
 //
 // Actions and Payloads
@@ -37,12 +39,15 @@ export const updateDatasourceInstanceAction = createAction<UpdateDatasourceInsta
 /**
  * Loads a new datasource identified by the given name.
  */
-export function changeDatasource(
-  exploreId: string,
-  datasource: string | DataSourceRef,
-  options?: { importQueries: boolean }
-): ThunkResult<Promise<void>> {
-  return async (dispatch, getState) => {
+
+interface ChangeDatasourcePayload {
+  exploreId: string;
+  datasource: string | DataSourceRef;
+  options?: { importQueries: boolean };
+}
+export const changeDatasource = createAsyncThunk(
+  'explore/changeDatasource',
+  async ({ datasource, exploreId, options }: ChangeDatasourcePayload, { getState, dispatch }) => {
     const orgId = getState().user.orgId;
     const { history, instance } = await loadAndInitDatasource(orgId, datasource);
     const currentDataSourceInstance = getState().explore.panes[exploreId]!.datasourceInstance;
@@ -60,8 +65,13 @@ export function changeDatasource(
       })
     );
 
+    const queries = getState().explore.panes[exploreId]!.queries;
+
+    const datasourceUIDs = getDatasourceUIDs(instance.uid, queries);
+    const correlations = await getCorrelationsBySourceUIDs(datasourceUIDs);
+    dispatch(saveCorrelationsAction({ exploreId: exploreId, correlations: correlations.correlations || [] }));
+
     if (options?.importQueries) {
-      const queries = getState().explore.panes[exploreId]!.queries;
       await dispatch(importQueries(exploreId, queries, currentDataSourceInstance, instance));
     }
 
@@ -73,8 +83,8 @@ export function changeDatasource(
     if (options?.importQueries) {
       dispatch(runQueries({ exploreId }));
     }
-  };
-}
+  }
+);
 
 //
 // Reducer

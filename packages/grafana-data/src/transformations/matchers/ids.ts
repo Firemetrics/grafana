@@ -19,6 +19,7 @@ export enum FieldMatcherID {
 
   // With arguments
   byType = 'byType',
+  byTypes = 'byTypes',
   byName = 'byName',
   byNames = 'byNames',
   byRegexp = 'byRegexp',
@@ -51,5 +52,7 @@ export enum ValueMatcherID {
   lowerOrEqual = 'lowerOrEqual',
   equal = 'equal',
   notEqual = 'notEqual',
+  substring = 'substring',
+  notSubstring = 'notSubstring',
   between = 'between',
 }

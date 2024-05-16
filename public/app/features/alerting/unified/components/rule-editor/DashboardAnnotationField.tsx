@@ -27,7 +27,7 @@ const DashboardAnnotationField = ({
   const styles = useStyles2(getStyles);
 
   const dashboardLink = makeDashboardLink(dashboard?.uid || dashboardUid);
-  const panelLink = makePanelLink(dashboard?.uid || dashboardUid, panel?.id.toString() || panelId);
+  const panelLink = makePanelLink(dashboard?.uid || dashboardUid, panel?.id?.toString() || panelId);
   return (
     <div className={styles.container}>
       {dashboard && (
@@ -63,22 +63,22 @@ const DashboardAnnotationField = ({
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  container: css`
-    margin-top: 5px;
-  `,
+  container: css({
+    marginTop: '5px',
+  }),
 
-  noLink: css`
-    color: ${theme.colors.text.secondary};
-  `,
-  link: css`
-    color: ${theme.colors.text.link};
-    margin-right: ${theme.spacing(1.5)};
-  `,
+  noLink: css({
+    color: theme.colors.text.secondary,
+  }),
+  link: css({
+    color: theme.colors.text.link,
+    marginRight: theme.spacing(1.5),
+  }),
 
-  icon: css`
-    margin-right: ${theme.spacing(1)};
-    cursor: pointer;
-  `,
+  icon: css({
+    marginRight: theme.spacing(1),
+    cursor: 'pointer',
+  }),
 });
 
 export default DashboardAnnotationField;
