@@ -157,8 +157,8 @@ class DarkColors implements ThemeColorsBase<Partial<ThemeRichColor>> {
   };
 
   gradients = {
-    brandHorizontal: 'linear-gradient(270deg, #ff4444 0%, #ff1616 100%)',
-    brandVertical: 'linear-gradient(0.01deg, #ff4444 0.01%, #ff1616 99.99%)',
+    brandHorizontal: 'linear-gradient(270deg, #720ef1 0%, #7E0E7F 100%)',
+    brandVertical: 'linear-gradient(0.01deg, #720ef1 0.01%, #7E0E7F 99.99%)',
   };
 
   contrastThreshold = 3;
@@ -239,8 +239,8 @@ class LightColors implements ThemeColorsBase<Partial<ThemeRichColor>> {
   };
 
   gradients = {
-    brandHorizontal: 'linear-gradient(90deg, #ff1616 0%, #8B0000 100%)',
-    brandVertical: 'linear-gradient(0.01deg, #8B0000 -31.2%, #ff1616 113.07%)',
+    brandHorizontal: 'linear-gradient(270deg, #720ef1 0%, #7E0E7F 100%)',
+    brandVertical: 'linear-gradient(0.01deg, #720ef1 0.01%, #7E0E7F 99.99%)',
   };
 
   contrastThreshold = 3;

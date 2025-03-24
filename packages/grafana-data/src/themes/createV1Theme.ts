@@ -129,7 +129,7 @@ export function createV1Theme(theme: Omit<GrafanaTheme2, 'v1'>): GrafanaTheme {
     greenShade: '#23843b',
     red: '#d44a3a',
     yellow: '#ecbb13',
-    purple: '#9933cc',
+    purple: '#7E0E7F',
     variable: '#32d1df',
     orange: '#eb7b18',
     orangeDark: '#ff780a',
@@ -186,7 +186,7 @@ export function createV1Theme(theme: Omit<GrafanaTheme2, 'v1'>): GrafanaTheme {
     name: theme.name,
     palette: {
       ...basicColors,
-      brandPrimary: basicColors.red,
+      brandPrimary: basicColors.purple,
       brandSuccess: theme.colors.success.main,
       brandWarning: theme.colors.warning.main,
       brandDanger: theme.colors.error.main,
